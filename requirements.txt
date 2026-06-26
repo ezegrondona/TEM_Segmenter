@@ -1,0 +1,10 @@
+PySide6
+napari
+imageio
+tifffile
+opencv-python
+torch
+torchvision
+mobile-sam @ git+https://github.com/ChaoningZhang/MobileSAM.git
+timm
+scikit-image
