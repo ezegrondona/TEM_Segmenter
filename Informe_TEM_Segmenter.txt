@@ -1,0 +1,78 @@
+Informe del proyecto TEM Segmenter
+
+TEM Segmenter es una aplicación de escritorio desarrollada en Python
+para asistir la segmentación semiautomática de estructuras presentes en
+imágenes de Microscopía Electrónica de Transmisión (TEM). El proyecto
+combina la experiencia del investigador con inteligencia artificial
+basada en MobileSAM, permitiendo obtener máscaras precisas mediante un
+clic del usuario y manteniendo siempre el control humano sobre la
+aceptación final de cada región de interés (ROI).
+
+OBJETIVOS - Reducir el tiempo de segmentación. - Mantener precisión y
+control del usuario. - Incorporar calibración métrica. - Guardar la
+información asociada a cada imagen. - Facilitar futuras mediciones
+morfológicas.
+
+ARQUITECTURA
+
+1.  Interfaz gráfica Implementada con PySide6 y Napari. Permite abrir
+    imágenes, visualizar capas, calibrar, segmentar y mostrar ROIs.
+
+2.  Gestión de sesiones Cada imagen posee una sesión independiente con:
+
+-   ruta de la imagen;
+-   calibración;
+-   lista de ROIs;
+-   carpeta de datos propia.
+
+3.  Calibración El usuario mide una barra de escala dibujando una línea.
+    A partir de la longitud en píxeles y la distancia conocida se
+    calcula el tamaño de píxel, que queda almacenado en un archivo JSON.
+
+4.  Preprocesamiento Se analiza automáticamente el contraste. Si es bajo
+    se aplica CLAHE para mejorar la calidad antes de la segmentación.
+
+5.  Segmentación Se utiliza MobileSAM. Flujo:
+
+-   carga automática del modelo;
+-   cálculo de embeddings una sola vez;
+-   clic del usuario;
+-   generación de máscara;
+-   previsualización;
+-   aceptación mediante ENTER;
+-   creación del ROI definitivo.
+
+6.  Gestión de ROIs Cada ROI almacena un identificador y una máscara
+    binaria, permitiendo futuras mediciones y exportaciones.
+
+ALMACENAMIENTO
+
+Cada imagen genera una carpeta donde se guardan la calibración y,
+posteriormente, la información de segmentación.
+
+TECNOLOGÍAS
+
+Python, PySide6, Napari, NumPy, OpenCV, ImageIO, Tifffile, PyTorch y
+MobileSAM.
+
+FLUJO GENERAL
+
+Abrir imagen → cargar sesión → calibrar → iniciar segmentación →
+seleccionar estructura → aceptar ROI → guardar resultados.
+
+FUTURAS EXTENSIONES
+
+-   edición manual de máscaras;
+-   puntos positivos y negativos;
+-   estadísticas automáticas;
+-   exportación científica;
+-   mediciones morfológicas;
+-   procesamiento por lotes;
+-   integración con modelos especializados.
+
+CONCLUSIÓN
+
+TEM Segmenter constituye una plataforma modular para el análisis de
+imágenes TEM que combina inteligencia artificial con supervisión humana.
+La arquitectura facilita el crecimiento del proyecto incorporando nuevas
+herramientas sin modificar significativamente la base existente.

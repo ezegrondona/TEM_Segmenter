@@ -9,6 +9,9 @@
 import json
 from pathlib import Path
 
+import numpy as np
+import tifffile
+
 
 # ==========================================================
 # CALIBRACIÓN
@@ -60,4 +63,53 @@ def load_calibration(image_path):
             return data
     except Exception as e:
         print(f"Error al cargar calibración: {e}")
+        return None
+
+
+# ==========================================================
+# MÁSCARAS / SEGMENTACIONES
+# ==========================================================
+
+def save_masks(image_session):
+    """
+    Guarda la matriz combinada de segmentaciones aceptadas de una
+    imagen en su carpeta de datos, como TIFF de enteros sin signo.
+    Se guarda como TIFF (y no como JSON) para que sea directamente
+    compatible con Fiji/ImageJ.
+    """
+
+    if not image_session.has_masks:
+        return
+
+    data_folder = image_session.data_folder
+    data_folder.mkdir(parents=True, exist_ok=True)
+
+    masks_file = data_folder / "masks.tif"
+
+    tifffile.imwrite(
+        masks_file,
+        image_session.masks.astype(np.uint32)
+    )
+
+
+# ==========================================================
+
+def load_masks(image_path):
+    """
+    Carga la matriz de segmentaciones guardada para una imagen,
+    si existe. Retorna un array de numpy o None si no existe o
+    si ocurre un error al leerlo.
+    """
+
+    image_path = Path(image_path)
+    data_folder = image_path.parent / image_path.stem
+    masks_file = data_folder / "masks.tif"
+
+    if not masks_file.exists():
+        return None
+
+    try:
+        return tifffile.imread(masks_file)
+    except Exception as e:
+        print(f"Error al cargar máscaras: {e}")
         return None

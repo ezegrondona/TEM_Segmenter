@@ -45,7 +45,7 @@ class InfoPanel(QWidget):
 
         self.calibrate_button = QPushButton("📏 Calibrar")
         
-        self.segment_button = QPushButton("▶ Segmentar")
+        self.segment_button = QPushButton("▶ Segmentación Automática")
 
         self.manual_segment_button = QPushButton("✏️ Segmentación manual")
 

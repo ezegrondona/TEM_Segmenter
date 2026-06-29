@@ -9,6 +9,7 @@ import math
 
 import imageio.v3 as iio
 import napari
+from napari.utils.colormaps import DirectLabelColormap
 import numpy as np
 import tifffile
 
@@ -41,6 +42,9 @@ class ImageView(QWidget):
         # Modo activo
         self.interaction_mode = MODE_NONE
 
+        # Estado de la barra espaciadora (pan temporal durante segmentación)
+        self._space_held = False
+
         self.setup_ui()
 
     # ======================================================
@@ -49,6 +53,10 @@ class ImageView(QWidget):
 
         layout = QVBoxLayout()
         layout.setContentsMargins(0, 0, 0, 0)
+
+        # Asegura que este widget pueda recibir foco de teclado
+        # (necesario para ENTER, ESCAPE y la barra espaciadora).
+        self.setFocusPolicy(Qt.StrongFocus)
 
         self.viewer = napari.Viewer(show=False)
 
@@ -175,15 +183,71 @@ class ImageView(QWidget):
             self.temp_mask_layer = self.viewer.add_labels(
                 np.zeros(shape, dtype=int),
                 name="Temp Mask",
-                opacity=0.55
+                opacity=0.55,
+                # En napari >= 0.5 el kwarg 'color' fue eliminado del
+                # constructor de Labels; ahora el color fijo se define
+                # con un DirectLabelColormap. La clave "None" actúa como
+                # color por defecto para cualquier etiqueta no nula
+                # -> todo lo seleccionado se ve rojo.
+                colormap=DirectLabelColormap(
+                    color_dict={None: (1.0, 0.0, 0.0, 1.0)}
+                )
             )
 
         if self.accepted_masks_layer is None:
             self.accepted_masks_layer = self.viewer.add_labels(
                 np.zeros(shape, dtype=int),
                 name="Segmentations",
-                opacity=0.55
+                opacity=0.55,
+                # Mismo mecanismo: todas las máscaras aprobadas se ven
+                # verdes, sin importar cuántas distintas haya (cada una
+                # mantiene su propio número de etiqueta internamente).
+                colormap=DirectLabelColormap(
+                    color_dict={None: (0.0, 1.0, 0.0, 1.0)}
+                )
             )
+
+    # ======================================================
+    # PERSISTENCIA DE MÁSCARAS (lectura/restauración externa)
+    # ======================================================
+
+    def get_masks_data(self):
+        """
+        Devuelve una copia de la matriz de segmentaciones aceptadas
+        actual, o None si todavía no existe la capa (no se aceptó
+        ninguna segmentación en esta imagen).
+        """
+
+        if self.accepted_masks_layer is None:
+            return None
+
+        return self.accepted_masks_layer.data.copy()
+
+    # ======================================================
+
+    def load_accepted_masks(self, masks_array):
+        """
+        Restaura segmentaciones previamente guardadas (desde disco
+        o desde la sesión en memoria) en la capa de segmentaciones
+        aceptadas, creándola si todavía no existe.
+        """
+
+        if self.image_layer is None or masks_array is None:
+            return
+
+        self._ensure_mask_layers()
+
+        expected_shape = self.accepted_masks_layer.data.shape
+
+        if masks_array.shape != expected_shape:
+            print(
+                f"Aviso: las máscaras guardadas ({masks_array.shape}) no "
+                f"coinciden con el tamaño de la imagen actual ({expected_shape}). "
+                "Se ignoran para evitar datos corruptos."
+            )
+            return
+
+        self.accepted_masks_layer.data = masks_array.astype(int)
 
     # ======================================================
     # SEGMENTACIÓN AUTOMÁTICA (SAM)
@@ -230,6 +294,11 @@ class ImageView(QWidget):
     def on_mouse_click(self, viewer, event):
 
         if self.interaction_mode != MODE_SAM:
+            return
+
+        # Si se mantiene presionada la barra espaciadora, el clic se
+        # destina a mover la imagen (pan), no a segmentar.
+        if self._space_held:
             return
 
         if event.type == 'mouse_press':
@@ -336,12 +405,78 @@ class ImageView(QWidget):
     # ======================================================
 
     def keyPressEvent(self, event):
-        """Qt intercepta la tecla Enter directamente, sin depender de Napari."""
+        """Qt intercepta las teclas directamente, sin depender de Napari."""
 
         if event.key() in (Qt.Key_Return, Qt.Key_Enter):
             self._accept_temp_mask()
+
+        elif event.key() == Qt.Key_Escape:
+            self._cancel_temp_selection()
+
+        elif event.key() == Qt.Key_Space:
+            # Evita repetir la acción mientras la tecla queda presionada
+            if not self._space_held:
+                self._space_held = True
+                self._set_pan_cursor(True)
+            event.accept()
+
         else:
             super().keyPressEvent(event)
+
+    # ======================================================
+
+    def keyReleaseEvent(self, event):
+        """Detecta cuando se suelta la barra espaciadora para volver a segmentar."""
+
+        if event.key() == Qt.Key_Space:
+            self._space_held = False
+            self._set_pan_cursor(False)
+            event.accept()
+        else:
+            super().keyReleaseEvent(event)
+
+    # ======================================================
+
+    def _set_pan_cursor(self, enabled):
+        """
+        Cambia el cursor a 'manito' mientras se mantiene presionada la
+        barra espaciadora, para indicar que el modo activo es mover
+        la imagen y no segmentar.
+        """
+        try:
+            canvas_widget = self.viewer.window._qt_viewer.canvas.native
+            if enabled:
+                canvas_widget.setCursor(Qt.OpenHandCursor)
+            else:
+                canvas_widget.unsetCursor()
+        except Exception:
+            pass
+
+    # ======================================================
+
+    def _cancel_temp_selection(self):
+        """
+        Cancela la selección actual sin aceptarla (tecla ESCAPE).
+        Funciona tanto si el clic fue de SAM como si fue un polígono
+        manual: borra la máscara temporal y, si corresponde, el
+        polígono que se estuviera dibujando, para poder repetir la
+        selección desde cero.
+        """
+
+        if self.temp_mask_layer is not None:
+            self.temp_mask_layer.data = np.zeros_like(self.temp_mask_layer.data)
+
+        if self.interaction_mode == MODE_MANUAL and getattr(self, "manual_shapes_layer", None) is not None:
+            try:
+                self.manual_shapes_layer.data = []
+                # Se reinicia el modo para descartar cualquier vértice
+                # que estuviera "en curso" (todavía no confirmado).
+                self.manual_shapes_layer.mode = "pan_zoom"
+                self.manual_shapes_layer.mode = "add_polygon"
+            except Exception:
+                pass
+
+        print("Selección cancelada (ESCAPE).")
 
     # ======================================================
 

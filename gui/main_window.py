@@ -290,7 +290,7 @@ class MainWindow(QMainWindow):
 
         if getattr(self.image_view, "segmentation_mode", False):
             self.image_view.stop_segmentation()
-            self.info_panel.segment_button.setText("▶ Segmentar")
+            self.info_panel.segment_button.setText("▶ Segmentación Automática")
 
         self.image_view.load_image(filename)
 
@@ -304,6 +304,19 @@ class MainWindow(QMainWindow):
                     data["distance"],
                     data["unit"]
                 )
+
+        # --------------------------------------------------
+        # Restaurar máscaras (desde la sesión en memoria, o
+        # si no había nada en memoria, desde disco)
+        # --------------------------------------------------
+
+        if image_session.masks is None:
+            loaded_masks = storage.load_masks(filename)
+            if loaded_masks is not None:
+                image_session.set_masks(loaded_masks)
+
+        if image_session.masks is not None:
+            self.image_view.load_accepted_masks(image_session.masks)
 
         info = get_image_info(filename)
 
@@ -400,7 +413,7 @@ class MainWindow(QMainWindow):
             self._run_segmentation_start()
         else:
             self.image_view.stop_segmentation()
-            self.info_panel.segment_button.setText("▶ Segmentar")
+            self.info_panel.segment_button.setText("▶ Segmentación Automática")
 
     # ======================================================
 
@@ -440,7 +453,7 @@ class MainWindow(QMainWindow):
             return
 
         dlg.close()
-        self.info_panel.segment_button.setText("⏹ Detener Segmentación")
+        self.info_panel.segment_button.setText("⏹ Detener Segmentación Automática")
 
     # ======================================================
 
@@ -453,7 +466,7 @@ class MainWindow(QMainWindow):
             # Detener SAM si estaba activo
             if self.image_view.segmentation_mode:
                 self.image_view.stop_segmentation()
-                self.info_panel.segment_button.setText("▶ Segmentar")
+                self.info_panel.segment_button.setText("▶ Segmentación Automática")
 
             self.image_view.start_manual_segmentation()
             self.info_panel.manual_segment_button.setText("⏹ Detener Seg. Manual")
@@ -466,6 +479,12 @@ class MainWindow(QMainWindow):
     def on_mask_accepted(self, label_id):
         """Callback cuando el usuario acepta una máscara (Enter)."""
         self.session.modified = True
+
+        if self.current_image is not None:
+            image_session = self.session.get_image(self.current_image)
+            if image_session is not None:
+                image_session.set_masks(self.image_view.get_masks_data())
+
         self.info_panel.update_status(f"Segmentaciones: {label_id}")
 
     # ======================================================
@@ -480,12 +499,21 @@ class MainWindow(QMainWindow):
 
         saved_count = 0
         for filename, image_session in self.session.images.items():
+            image_saved = False
+
             if image_session.calibrated:
                 storage.save_calibration(image_session)
+                image_saved = True
+
+            if image_session.has_masks:
+                storage.save_masks(image_session)
+                image_saved = True
+
+            if image_saved:
                 saved_count += 1
-                
+
         self.session.modified = False
-        
+
         if saved_count > 0:
             QMessageBox.information(self, "Guardar", f"Se guardaron datos de {saved_count} imágenes.")
 
@@ -519,14 +547,18 @@ class MainWindow(QMainWindow):
         folder_path = Path(folder)
         
         calibration_file = folder_path / "calibration.json"
-        
+        masks_file = folder_path / "masks.tif"
+
+        image_session = self.session.get_image(self.current_image)
+
+        loaded_something = False
+
         if calibration_file.exists():
             import json
             try:
                 with open(calibration_file, "r", encoding="utf-8") as f:
                     data = json.load(f)
                     
-                image_session = self.session.get_image(self.current_image)
                 image_session.set_calibration(
                     data["pixels"],
                     data["distance"],
@@ -538,13 +570,30 @@ class MainWindow(QMainWindow):
                 info["scale"] = f'{image_session.calibration["pixel_size"]:.6f} {data["unit"]}/px'
                 info["status"] = "Calibrada (Importada)"
                 self.info_panel.update_info(info)
-                
-                QMessageBox.information(self, "Cargar proyecto", "Datos cargados correctamente.")
+
+                loaded_something = True
                 
             except Exception as e:
-                QMessageBox.critical(self, "Error", f"Error al cargar datos: {e}")
+                QMessageBox.critical(self, "Error", f"Error al cargar calibración: {e}")
+
+        if masks_file.exists():
+            try:
+                import tifffile
+                masks_array = tifffile.imread(masks_file)
+
+                image_session.set_masks(masks_array)
+                self.image_view.load_accepted_masks(masks_array)
+                self.session.modified = True
+
+                loaded_something = True
+
+            except Exception as e:
+                QMessageBox.critical(self, "Error", f"Error al cargar máscaras: {e}")
+
+        if loaded_something:
+            QMessageBox.information(self, "Cargar proyecto", "Datos cargados correctamente.")
         else:
-            QMessageBox.information(self, "Cargar proyecto", "No se encontraron datos de calibración en la carpeta seleccionada.")
+            QMessageBox.information(self, "Cargar proyecto", "No se encontraron datos de calibración ni máscaras en la carpeta seleccionada.")
 
     # ======================================================
     # EVENTOS

@@ -8,6 +8,8 @@
 
 from pathlib import Path
 
+import numpy as np
+
 
 class ImageSession:
 
@@ -27,7 +29,7 @@ class ImageSession:
 
         self.measurements = []
 
-        self.masks = []
+        self.masks = None
 
         self.notes = ""
 
@@ -113,3 +115,35 @@ class ImageSession:
         """
 
         self.calibration = None
+
+    # ======================================================
+    # MÁSCARAS / SEGMENTACIONES
+    # ======================================================
+
+    @property
+    def has_masks(self):
+        """
+        Indica si la imagen tiene al menos una segmentación
+        aceptada en memoria (lista para guardarse o ya guardada).
+        """
+
+        return self.masks is not None and np.any(self.masks > 0)
+
+    # ======================================================
+
+    def set_masks(self, masks_array):
+        """
+        Guarda en memoria la matriz combinada de todas las
+        segmentaciones (ROIs) aceptadas para esta imagen.
+        """
+
+        self.masks = masks_array
+
+    # ======================================================
+
+    def clear_masks(self):
+        """
+        Elimina las máscaras en memoria.
+        """
+
+        self.masks = None
