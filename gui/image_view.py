@@ -385,7 +385,7 @@ class ImageView(QWidget):
 
     def _on_manual_shape_added(self, event):
         """Convierte el polígono dibujado a una máscara en temp_mask_layer."""
-        if self.tool_manager.current_tool != Tool.MANUAL
+        if self.tool_manager.current_tool != Tool.MANUAL:
             return
         if not hasattr(self, "manual_shapes_layer"):
             return
