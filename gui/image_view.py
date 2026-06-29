@@ -86,7 +86,7 @@ class ImageView(QWidget):
 
     @property
     def segmentation_mode(self):
-        return self.interaction_mode == MODE_SAM
+        return self.tool_manager.current_tool == Tool.SAM
 
     # ======================================================
 
@@ -300,7 +300,7 @@ class ImageView(QWidget):
 
     def on_mouse_click(self, viewer, event):
 
-        if self.interaction_mode != MODE_SAM:
+        if self.tool_manager.current_tool != Tool.SAM:
             return
 
         # Si se mantiene presionada la barra espaciadora, el clic se
@@ -385,7 +385,7 @@ class ImageView(QWidget):
 
     def _on_manual_shape_added(self, event):
         """Convierte el polígono dibujado a una máscara en temp_mask_layer."""
-        if self.interaction_mode != MODE_MANUAL:
+        if self.tool_manager.current_tool != Tool.MANUAL
             return
         if not hasattr(self, "manual_shapes_layer"):
             return
@@ -476,7 +476,7 @@ class ImageView(QWidget):
         if self.temp_mask_layer is not None:
             self.temp_mask_layer.data = np.zeros_like(self.temp_mask_layer.data)
 
-        if self.interaction_mode == MODE_MANUAL and getattr(self, "manual_shapes_layer", None) is not None:
+        if self.tool_manager.current_tool == Tool.MANUAL and getattr(self, "manual_shapes_layer", None) is not None:
             try:
                 self.manual_shapes_layer.data = []
                 # Se reinicia el modo para descartar cualquier vértice
