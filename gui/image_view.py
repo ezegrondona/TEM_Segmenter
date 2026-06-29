@@ -305,6 +305,11 @@ class ImageView(QWidget):
 
         # Si se mantiene presionada la barra espaciadora, el clic se
         # destina a mover la imagen (pan), no a segmentar.
+        from PySide6.QtWidgets import QApplication
+
+        if QApplication.keyboardModifiers() & Qt.KeyboardModifier.NoModifier:
+            self._space_held = False
+
         if self._space_held:
             return
 
