@@ -300,21 +300,24 @@ class ImageView(QWidget):
 
     def on_mouse_click(self, viewer, event):
 
-        if self.tool_manager.current_tool != Tool.SAM:
-            return
+    print("\n========== CALLBACK ==========")
+    print("ToolManager :", self.tool_manager.current_tool)
+    print("Interaction :", self.interaction_mode)
+    print("Space held  :", self._space_held)
+    print("Event type  :", event.type)
 
-        # Si se mantiene presionada la barra espaciadora, el clic se
-        # destina a mover la imagen (pan), no a segmentar.
-        from PySide6.QtWidgets import QApplication
+    if self.tool_manager.current_tool != Tool.SAM:
+        print(">>> Sale por ToolManager")
+        return
 
-        if QApplication.keyboardModifiers() & Qt.KeyboardModifier.NoModifier:
-            self._space_held = False
+    if self._space_held:
+        print(">>> Sale por Space")
+        return
 
-        if self._space_held:
-            return
-
-        if event.type == 'mouse_press':
-            # Convertir coordenadas world → píxeles de imagen
+    if event.type == "mouse_press":
+        print(">>> Mouse Press OK")
+        
+        # Convertir coordenadas world → píxeles de imagen
             coords = self.image_layer.world_to_data(event.position)
             y, x = int(coords[0]), int(coords[1])
 
