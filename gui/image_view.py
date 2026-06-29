@@ -14,6 +14,7 @@ import numpy as np
 import tifffile
 
 from PySide6.QtCore import Signal, Qt
+from core.tool_manager import ToolManager, Tool
 from PySide6.QtWidgets import QWidget, QVBoxLayout
 
 # Modos de interacción disponibles
@@ -44,6 +45,9 @@ class ImageView(QWidget):
 
         # Estado de la barra espaciadora (pan temporal durante segmentación)
         self._space_held = False
+        
+        # Administrador de herramientas
+        self.tool_manager = ToolManager()
 
         self.setup_ui()
 
@@ -271,6 +275,7 @@ class ImageView(QWidget):
         self._ensure_mask_layers()
 
         self.interaction_mode = MODE_SAM
+        self.tool_manager.activate(Tool.SAM)
 
         if self.on_mouse_click not in self.viewer.mouse_drag_callbacks:
             self.viewer.mouse_drag_callbacks.append(self.on_mouse_click)
@@ -287,6 +292,8 @@ class ImageView(QWidget):
             self.viewer.mouse_drag_callbacks.remove(self.on_mouse_click)
 
         self.interaction_mode = MODE_NONE
+        self.tool_manager.activate(Tool.NONE)
+    
         print("Modo segmentación finalizado.")
 
     # ======================================================
@@ -351,6 +358,7 @@ class ImageView(QWidget):
         self.manual_shapes_layer.mode = "add_polygon"
 
         self.interaction_mode = MODE_MANUAL
+        self.tool_manager.activate(Tool.MANUAL)
 
         # Conectar evento de datos para detectar cuando termina el polígono
         self.manual_shapes_layer.events.data.connect(self._on_manual_shape_added)
@@ -362,6 +370,7 @@ class ImageView(QWidget):
 
     def stop_manual_segmentation(self):
         self.interaction_mode = MODE_NONE
+        self.tool_manager.activate(Tool.NONE)
 
         if hasattr(self, "manual_shapes_layer") and self.manual_shapes_layer is not None:
             try:
@@ -430,6 +439,7 @@ class ImageView(QWidget):
 
         if event.key() == Qt.Key_Space:
             self._space_held = False
+            self.tool_manager = ToolManager()
             self._set_pan_cursor(False)
             event.accept()
         else:
