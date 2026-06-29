@@ -300,23 +300,47 @@ class ImageView(QWidget):
 
     def on_mouse_click(self, viewer, event):
 
-    print("\n========== CALLBACK ==========")
-    print("ToolManager :", self.tool_manager.current_tool)
-    print("Interaction :", self.interaction_mode)
-    print("Space held  :", self._space_held)
-    print("Event type  :", event.type)
+        print("\n========== CALLBACK ==========")
+        print("ToolManager :", self.tool_manager.current_tool)
+        print("Interaction :", self.interaction_mode)
+        print("Space held  :", self._space_held)
+        print("Event type  :", event.type)
 
-    if self.tool_manager.current_tool != Tool.SAM:
-        print(">>> Sale por ToolManager")
-        return
+        if self.tool_manager.current_tool != Tool.SAM:
+            print(">>> Sale por ToolManager")
+            return
 
-    if self._space_held:
-        print(">>> Sale por Space")
-        return
+        if self._space_held:
+            print(">>> Sale por Space")
+            return
 
-    if event.type == "mouse_press":
-        print(">>> Mouse Press OK")
-        
+        if event.type == "mouse_press":
+
+            print("MOUSE PRESS", self.tool_manager.current_tool, self._space_held)
+
+            # Convertir coordenadas world → píxeles de imagen
+            coords = self.image_layer.world_to_data(event.position)
+            y, x = int(coords[0]), int(coords[1])
+
+            h, w = self.image_layer.data.shape[:2]
+
+            if 0 <= y < h and 0 <= x < w:
+
+                print(f"Clic detectado en ({x}, {y})")
+
+                mask = self.segmenter.predict_point(x, y)
+
+                if mask is not None:
+
+                    temp_data = np.zeros((h, w), dtype=int)
+                    temp_data[mask] = 1
+
+                    self.temp_mask_layer.data = temp_data
+
+                    print("Máscara temporal generada. Presione ENTER para aceptar.")
+
+                    self.setFocus()
+                
         # Convertir coordenadas world → píxeles de imagen
             coords = self.image_layer.world_to_data(event.position)
             y, x = int(coords[0]), int(coords[1])
