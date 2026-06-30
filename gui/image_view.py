@@ -79,6 +79,37 @@ class ImageView(QWidget):
 
         layout.addWidget(qt)
         self.setLayout(layout)
+        canvas = self.viewer.window._qt_viewer.canvas.native
+        canvas.installEventFilter(self)
+
+    def eventFilter(self, obj, event):
+
+        from PySide6.QtCore import QEvent
+
+        if event.type() == QEvent.KeyPress:
+
+            if event.key() == Qt.Key_Space:
+
+                print("SPACE DOWN")
+
+                if not self._space_held:
+                    self._space_held = True
+                    self._set_pan_cursor(True)
+
+            return False
+
+            elif event.type() == QEvent.KeyRelease:
+
+            if event.key() == Qt.Key_Space:
+
+                print("SPACE UP")
+
+            self._space_held = False
+            self._set_pan_cursor(False)
+
+            return False
+
+    return super().eventFilter(obj, event)
 
     # ======================================================
     # Propiedades de conveniencia
