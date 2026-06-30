@@ -6,14 +6,18 @@
 
 from pathlib import Path
 
-from PySide6.QtCore import Signal
+from PySide6.QtCore import Signal, Qt
 
 from PySide6.QtWidgets import (
     QWidget,
     QLabel,
     QListWidget,
+    QListWidgetItem,
     QVBoxLayout,
-    QGroupBox
+    QHBoxLayout,
+    QGroupBox,
+    QPushButton,
+    QSizePolicy
 )
 
 
@@ -21,6 +25,10 @@ class ProjectPanel(QWidget):
 
     # Señal emitida cuando cambia la imagen seleccionada
     image_selected = Signal(Path)
+
+    # Señal emitida cuando el usuario cierra una imagen de la lista
+    # (botón ✕ de esa fila)
+    image_closed = Signal(Path)
 
     def __init__(self):
 
@@ -40,7 +48,7 @@ class ProjectPanel(QWidget):
 
         project_layout = QVBoxLayout()
 
-        self.folder_label = QLabel("Carpeta: (sin seleccionar)")
+        self.folder_label = QLabel("Imágenes abiertas")
 
         self.image_list = QListWidget()
 
@@ -58,65 +66,161 @@ class ProjectPanel(QWidget):
         self.setLayout(layout)
 
     # ======================================================
+    # CARPETA (solo etiqueta informativa)
+    # ======================================================
 
     def set_folder(self, folder):
 
         folder = Path(folder)
 
         self.folder_label.setText(
-            f"Carpeta:\n{folder.name}"
+            f"Carpeta abierta:\n{folder.name}"
         )
 
     # ======================================================
+    # AGREGAR IMÁGENES (sin borrar las que ya estaban abiertas)
+    # ======================================================
 
-    def set_single_image(self, image_path):
+    def add_image(self, image_path):
+        """
+        Agrega UNA imagen a la lista. Si ya estaba abierta,
+        simplemente la selecciona en vez de duplicarla.
+        """
 
         image_path = Path(image_path)
 
-        self.folder_label.setText(
-            f"Imagen:\n{image_path.name}"
-        )
+        if image_path in self.images:
+            self._select_image(image_path)
+            return
 
-        self.images = [image_path]
+        self.images.append(image_path)
+        self._add_list_row(image_path)
 
-        self.image_list.clear()
-
-        self.image_list.addItem(image_path.name)
-
-        self.image_list.setCurrentRow(0)
+        self.image_list.setCurrentRow(self.image_list.count() - 1)
 
     # ======================================================
 
-    def set_image_list(self, images):
+    def add_images(self, image_paths):
+        """
+        Agrega VARIAS imágenes a la lista (abrir carpeta o
+        multi-selección de archivos). Las que ya estuvieran
+        abiertas se ignoran, no se duplican.
+        """
 
-        self.images = images
+        added_any = False
 
-        self.image_list.clear()
+        for image_path in image_paths:
 
-        if not images:
+            image_path = Path(image_path)
 
-            self.image_list.addItem(
-                "No se encontraron imágenes."
-            )
+            if image_path in self.images:
+                continue
 
+            self.images.append(image_path)
+            self._add_list_row(image_path)
+            added_any = True
+
+        if added_any:
+            self.image_list.setCurrentRow(self.image_list.count() - 1)
+
+    # ======================================================
+    # FILA DE LA LISTA (nombre + botón de cierre individual)
+    # ======================================================
+
+    def _add_list_row(self, image_path):
+
+        item = QListWidgetItem()
+
+        # Guardamos la ruta completa en el propio item, para no
+        # depender de que el orden visual coincida con self.images.
+        item.setData(Qt.UserRole, image_path)
+
+        self.image_list.addItem(item)
+
+        row_widget = QWidget()
+
+        row_layout = QHBoxLayout()
+        row_layout.setContentsMargins(4, 2, 4, 2)
+
+        name_label = QLabel(image_path.name)
+        name_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        name_label.setToolTip(str(image_path))
+
+        close_button = QPushButton("✕")
+        close_button.setFixedSize(20, 20)
+        close_button.setToolTip("Cerrar esta imagen")
+        close_button.clicked.connect(
+            lambda _checked=False, path=image_path: self._close_image(path)
+        )
+
+        row_layout.addWidget(name_label)
+        row_layout.addWidget(close_button)
+
+        row_widget.setLayout(row_layout)
+
+        item.setSizeHint(row_widget.sizeHint())
+
+        self.image_list.setItemWidget(item, row_widget)
+
+    # ======================================================
+    # CERRAR UNA IMAGEN (botón ✕)
+    # ======================================================
+
+    def _close_image(self, image_path):
+
+        row = self._row_of(image_path)
+
+        if row is None:
             return
 
-        for image in images:
+        self.image_list.takeItem(row)
+        self.images.remove(image_path)
 
-            self.image_list.addItem(image.name)
+        self.image_closed.emit(image_path)
 
-        self.image_list.setCurrentRow(0)
+        # Si queda alguna imagen abierta, seleccionar otra
+        # para que el visor no quede sin nada cargado.
+        if self.images:
+            new_row = min(row, len(self.images) - 1)
+            self.image_list.setCurrentRow(new_row)
 
+    # ======================================================
+
+    def _row_of(self, image_path):
+
+        for row in range(self.image_list.count()):
+
+            item = self.image_list.item(row)
+
+            if item.data(Qt.UserRole) == image_path:
+                return row
+
+        return None
+
+    # ======================================================
+
+    def _select_image(self, image_path):
+
+        row = self._row_of(image_path)
+
+        if row is not None:
+            self.image_list.setCurrentRow(row)
+
+    # ======================================================
+    # SELECCIÓN
     # ======================================================
 
     def on_selection_changed(self, row):
 
         if row < 0:
-
             return
 
-        if row >= len(self.images):
+        item = self.image_list.item(row)
 
+        if item is None:
             return
 
-        self.image_selected.emit(self.images[row])
+        image_path = item.data(Qt.UserRole)
+
+        if image_path is not None:
+            self.image_selected.emit(image_path)

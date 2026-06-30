@@ -113,3 +113,77 @@ def load_masks(image_path):
     except Exception as e:
         print(f"Error al cargar máscaras: {e}")
         return None
+
+
+# ==========================================================
+# ROIs INDIVIDUALES ESTILO FIJI/IMAGEJ (RoiSet.zip)
+# ==========================================================
+
+def save_rois(image_session):
+    """
+    Convierte cada segmentación aceptada (cada etiqueta distinta
+    de la máscara combinada) en un ROI individual tipo ImageJ
+    (FREEHAND, a partir del contorno de la región) y los guarda
+    todos juntos en RoiSet.zip dentro de la carpeta de datos de
+    la imagen.
+
+    Ese archivo se abre directo en Fiji (arrastrándolo a la
+    barra de Fiji, o desde el ROI Manager con "More >> Open..."),
+    y una vez cargado cada ROI puede seleccionarse o eliminarse
+    de forma individual desde el ROI Manager, igual que si se
+    hubieran dibujado a mano ahí.
+
+    No requiere que la imagen esté calibrada: los ROIs se guardan
+    en coordenadas de píxel, como espera Fiji.
+    """
+
+    if not image_session.has_masks:
+        return
+
+    import roifile
+    from skimage import measure
+
+    masks = image_session.masks
+    labels = np.unique(masks)
+
+    rois = []
+
+    for label_id in labels:
+
+        if label_id == 0:
+            continue
+
+        binary = (masks == label_id)
+
+        contours = measure.find_contours(binary.astype(float), level=0.5)
+
+        if not contours:
+            continue
+
+        # Si una etiqueta quedó partida en más de un contorno
+        # (por ejemplo, dos clics que generaron regiones separadas
+        # con la misma etiqueta), se usa el contorno más largo.
+        contour = max(contours, key=len)
+
+        # find_contours devuelve (fila, columna) = (y, x);
+        # ImageJ/Fiji espera (x, y).
+        points = np.column_stack([contour[:, 1], contour[:, 0]])
+
+        roi = roifile.ImagejRoi.frompoints(
+            points,
+            name=f"Mask_{int(label_id):03d}"
+        )
+
+        rois.append(roi)
+
+    if not rois:
+        return
+
+    data_folder = image_session.data_folder
+    data_folder.mkdir(parents=True, exist_ok=True)
+
+    roiset_file = data_folder / "RoiSet.zip"
+
+    # mode="w" sobrescribe el zip anterior en vez de ir acumulando
+    # ROIs viejos de corridas previas.
+    roifile.roiwrite(roiset_file, rois, mode="w")

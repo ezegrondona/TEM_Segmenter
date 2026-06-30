@@ -89,23 +89,14 @@ class ImageView(QWidget):
         if event.type() == QEvent.KeyPress:
 
             if event.key() == Qt.Key_Space:
-
-                print("SPACE DOWN")
-
-                if not self._space_held:
-                    self._space_held = True
-                    self._set_pan_cursor(True)
+                self._on_space_pressed()
 
             return False
 
         elif event.type() == QEvent.KeyRelease:
 
             if event.key() == Qt.Key_Space:
-
-                print("SPACE UP")
-
-                self._space_held = False
-                self._set_pan_cursor(False)
+                self._on_space_released()
 
             return False
 
@@ -467,10 +458,7 @@ class ImageView(QWidget):
             self._cancel_temp_selection()
 
         elif event.key() == Qt.Key_Space:
-            # Evita repetir la acción mientras la tecla queda presionada
-            if not self._space_held:
-                self._space_held = True
-                self._set_pan_cursor(True)
+            self._on_space_pressed()
             event.accept()
 
         else:
@@ -479,15 +467,57 @@ class ImageView(QWidget):
     # ======================================================
 
     def keyReleaseEvent(self, event):
-        print("KEY RELEASE", event.key())
         """Detecta cuando se suelta la barra espaciadora para volver a segmentar."""
 
         if event.key() == Qt.Key_Space:
-            self._space_held = False
-            self._set_pan_cursor(False)
+            self._on_space_released()
             event.accept()
         else:
             super().keyReleaseEvent(event)
+
+    # ======================================================
+
+    def _on_space_pressed(self):
+        """
+        Activa el modo "mover imagen" temporal mientras se mantiene
+        presionada la barra espaciadora.
+
+        En modo manual, la capa de shapes está en modo "add_polygon",
+        que captura el arrastre del mouse como nuevos vértices del
+        polígono en lugar de dejar que la cámara haga paneo. Por eso,
+        mientras se mantiene espacio, esa capa se cambia a "pan_zoom"
+        (se restaura en _on_space_released al soltar la tecla).
+        """
+
+        if self._space_held:
+            return
+
+        self._space_held = True
+        self._set_pan_cursor(True)
+
+        if (
+            self.interaction_mode == MODE_MANUAL
+            and getattr(self, "manual_shapes_layer", None) is not None
+        ):
+            self.manual_shapes_layer.mode = "pan_zoom"
+
+    # ======================================================
+
+    def _on_space_released(self):
+        """
+        Desactiva el modo "mover imagen" y, si había una segmentación
+        manual en curso, restaura el modo "add_polygon" de la capa de
+        shapes para poder seguir dibujando el polígono.
+        """
+
+        self._space_held = False
+        self._set_pan_cursor(False)
+
+        if (
+            self.interaction_mode == MODE_MANUAL
+            and getattr(self, "manual_shapes_layer", None) is not None
+        ):
+            self.manual_shapes_layer.mode = "add_polygon"
 
     # ======================================================
 

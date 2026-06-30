@@ -63,6 +63,10 @@ class MainWindow(QMainWindow):
             self.load_image
         )
 
+        self.project_panel.image_closed.connect(
+            self.on_image_closed
+        )
+
         self.info_panel.calibrate_button.clicked.connect(
             self.open_calibration
         )
@@ -235,11 +239,11 @@ class MainWindow(QMainWindow):
 
     def open_image(self):
 
-        filename, _ = QFileDialog.getOpenFileName(
+        filenames, _ = QFileDialog.getOpenFileNames(
 
             self,
 
-            "Abrir imagen",
+            "Abrir imagen(es)",
 
             "",
 
@@ -247,11 +251,11 @@ class MainWindow(QMainWindow):
 
         )
 
-        if not filename:
+        if not filenames:
             return
 
-        self.project_panel.set_single_image(filename)
-        self.load_image(filename)
+        self.project_panel.add_images(filenames)
+        self.load_image(filenames[-1])
 
     # ======================================================
     # ABRIR CARPETA
@@ -272,13 +276,15 @@ class MainWindow(QMainWindow):
 
         self.project_panel.set_folder(folder)
 
-        self.images = find_images(folder)
+        found_images = find_images(folder)
 
-        self.project_panel.set_image_list(self.images)
+        if not found_images:
+            QMessageBox.information(self, "Abrir carpeta", "No se encontraron imágenes en esa carpeta.")
+            return
 
-        if self.images:
+        self.project_panel.add_images(found_images)
 
-            self.load_image(self.images[0])
+        self.load_image(found_images[0])
 
     # ======================================================
     # CARGAR IMAGEN
@@ -296,24 +302,14 @@ class MainWindow(QMainWindow):
 
         image_session = self.session.add_image(filename)
 
-        if not image_session.calibrated:
-            data = storage.load_calibration(filename)
-            if data:
-                image_session.set_calibration(
-                    data["pixels"],
-                    data["distance"],
-                    data["unit"]
-                )
-
         # --------------------------------------------------
-        # Restaurar máscaras (desde la sesión en memoria, o
-        # si no había nada en memoria, desde disco)
+        # NOTA: ya no se lee nada de disco automáticamente acá.
+        # Calibración y máscaras solo se restauran si ya estaban
+        # en la sesión en memoria (porque esta misma imagen se
+        # trabajó antes en esta corrida del programa). Para
+        # traer datos guardados en una corrida anterior hay que
+        # usar explícitamente "Cargar proyecto...".
         # --------------------------------------------------
-
-        if image_session.masks is None:
-            loaded_masks = storage.load_masks(filename)
-            if loaded_masks is not None:
-                image_session.set_masks(loaded_masks)
 
         if image_session.masks is not None:
             self.image_view.load_accepted_masks(image_session.masks)
@@ -333,6 +329,34 @@ class MainWindow(QMainWindow):
             info["status"] = "Calibrada"
 
         self.info_panel.update_info(info)
+
+    # ======================================================
+    # CERRAR IMAGEN (botón ✕ del panel izquierdo)
+    # ======================================================
+
+    def on_image_closed(self, filename):
+        """
+        Se llama cuando el usuario cierra una imagen desde la lista
+        del panel izquierdo. Si la imagen cerrada era la que estaba
+        mostrándose, limpia el visor; los datos en memoria de esa
+        imagen (calibración/máscaras) se conservan en self.session
+        por si se vuelve a abrir en la misma corrida del programa.
+        """
+
+        if str(self.current_image) != str(filename):
+            return
+
+        if getattr(self.image_view, "segmentation_mode", False):
+            self.image_view.stop_segmentation()
+            self.info_panel.segment_button.setText("▶ Segmentación Automática")
+
+        if self.image_view.interaction_mode == "manual":
+            self.image_view.stop_manual_segmentation()
+            self.info_panel.manual_segment_button.setText("✏️ Segmentación manual")
+
+        self.image_view.clear()
+        self.current_image = None
+        self.info_panel.clear()
 
     # ======================================================
     # CALIBRACIÓN
@@ -507,6 +531,7 @@ class MainWindow(QMainWindow):
 
             if image_session.has_masks:
                 storage.save_masks(image_session)
+                storage.save_rois(image_session)
                 image_saved = True
 
             if image_saved:

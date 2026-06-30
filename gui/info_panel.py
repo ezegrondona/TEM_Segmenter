@@ -114,3 +114,14 @@ class InfoPanel(QWidget):
         self.status_label.setText(
             f"Estado:\n{text}"
         )
+
+    # ======================================================
+    # LIMPIAR (cuando se cierra la imagen activa)
+    # ======================================================
+
+    def clear(self):
+
+        self.image_label.setText("Imagen:\n---")
+        self.size_label.setText("Resolución:\n---")
+        self.scale_label.setText("Escala:\nSin calibrar")
+        self.status_label.setText("Estado:\nEsperando imagen")
