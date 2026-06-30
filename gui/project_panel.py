@@ -207,6 +207,16 @@ class ProjectPanel(QWidget):
             self.image_list.setCurrentRow(row)
 
     # ======================================================
+
+    def select_image(self, image_path):
+        """
+        Selecciona una imagen ya presente en la lista (no la agrega
+        si no está). Dispara image_selected una sola vez.
+        """
+
+        self._select_image(Path(image_path))
+
+    # ======================================================
     # SELECCIÓN
     # ======================================================
 

@@ -4,7 +4,7 @@
 # Archivo: main_window.py
 # ==========================================================
 
-from PySide6.QtGui import QAction, QKeySequence
+from PySide6.QtGui import QAction, QKeySequence, QShortcut
 from PySide6.QtCore import Qt, QThread, Signal as QtSignal
 from PySide6.QtWidgets import (
     QMainWindow,
@@ -82,7 +82,15 @@ class MainWindow(QMainWindow):
         self.image_view.mask_accepted.connect(
             self.on_mask_accepted
         )
-        
+
+        self.image_view.mask_removed.connect(
+            self.on_mask_removed
+        )
+
+        self.info_panel.delete_mask_requested.connect(
+            self.on_delete_mask_requested
+        )
+
         self.info_panel.load_project_button.clicked.connect(
             self.load_project_data
         )
@@ -102,6 +110,14 @@ class MainWindow(QMainWindow):
         self.calibration_dialog.calibration_saved.connect(
             self.save_calibration
         )
+
+        # --------------------------------------------------
+        # Atajo de teclado: Ctrl+Z deshace la última
+        # segmentación aceptada en la imagen actual.
+        # --------------------------------------------------
+
+        self.undo_shortcut = QShortcut(QKeySequence("Ctrl+Z"), self)
+        self.undo_shortcut.activated.connect(self.undo_last_segmentation)
 
     # ======================================================
     # INTERFAZ
@@ -254,8 +270,11 @@ class MainWindow(QMainWindow):
         if not filenames:
             return
 
+        # add_images() ya selecciona la última imagen agregada, lo
+        # que dispara la señal image_selected -> load_image() sola.
+        # Llamarla de nuevo acá duplicaba la carga (y, antes del fix
+        # en session.py, generaba dos entradas para la misma imagen).
         self.project_panel.add_images(filenames)
-        self.load_image(filenames[-1])
 
     # ======================================================
     # ABRIR CARPETA
@@ -284,7 +303,10 @@ class MainWindow(QMainWindow):
 
         self.project_panel.add_images(found_images)
 
-        self.load_image(found_images[0])
+        # add_images() ya seleccionó la última imagen agregada; acá
+        # elegimos explícitamente la primera, lo que dispara
+        # image_selected -> load_image() una sola vez.
+        self.project_panel.select_image(found_images[0])
 
     # ======================================================
     # CARGAR IMAGEN
@@ -297,6 +319,10 @@ class MainWindow(QMainWindow):
         if getattr(self.image_view, "segmentation_mode", False):
             self.image_view.stop_segmentation()
             self.info_panel.segment_button.setText("▶ Segmentación Automática")
+
+        if self.image_view.interaction_mode == "manual":
+            self.image_view.stop_manual_segmentation()
+            self.info_panel.manual_segment_button.setText("✏️ Segmentación manual")
 
         self.image_view.load_image(filename)
 
@@ -313,6 +339,8 @@ class MainWindow(QMainWindow):
 
         if image_session.masks is not None:
             self.image_view.load_accepted_masks(image_session.masks)
+
+        self.refresh_masks_panel()
 
         info = get_image_info(filename)
 
@@ -510,6 +538,46 @@ class MainWindow(QMainWindow):
                 image_session.set_masks(self.image_view.get_masks_data())
 
         self.info_panel.update_status(f"Segmentaciones: {label_id}")
+        self.refresh_masks_panel()
+
+    # ======================================================
+
+    def on_mask_removed(self, label_id):
+        """Callback cuando se borra una máscara (botón ✕ o Ctrl+Z)."""
+        self.session.modified = True
+
+        if self.current_image is not None:
+            image_session = self.session.get_image(self.current_image)
+            if image_session is not None:
+                image_session.set_masks(self.image_view.get_masks_data())
+
+        self.info_panel.update_status(f"Segmentación {label_id} borrada")
+        self.refresh_masks_panel()
+
+    # ======================================================
+
+    def on_delete_mask_requested(self, label_id):
+        """El usuario tocó el botón ✕ de una fila en el panel de Segmentaciones."""
+        self.image_view.remove_mask(label_id)
+
+    # ======================================================
+
+    def undo_last_segmentation(self):
+        """Ctrl+Z: deshace la última segmentación aceptada en la imagen actual."""
+
+        if self.current_image is None:
+            return
+
+        self.image_view.undo_last_mask()
+
+    # ======================================================
+
+    def refresh_masks_panel(self):
+        """Repuebla la lista de segmentaciones del panel derecho con las
+        máscaras actualmente aceptadas en la imagen mostrada."""
+
+        labels = self.image_view.get_mask_labels()
+        self.info_panel.set_masks_list(labels)
 
     # ======================================================
     # GUARDAR
@@ -522,17 +590,29 @@ class MainWindow(QMainWindow):
             return
 
         saved_count = 0
+        errors = []
+
         for filename, image_session in self.session.images.items():
             image_saved = False
 
             if image_session.calibrated:
-                storage.save_calibration(image_session)
-                image_saved = True
+                try:
+                    storage.save_calibration(image_session)
+                    image_saved = True
+                except Exception as e:
+                    errors.append(f"{image_session.name} (calibración): {e}")
 
             if image_session.has_masks:
-                storage.save_masks(image_session)
-                storage.save_rois(image_session)
-                image_saved = True
+                try:
+                    storage.save_masks(image_session)
+                    image_saved = True
+                except Exception as e:
+                    errors.append(f"{image_session.name} (máscaras): {e}")
+
+                try:
+                    storage.save_rois(image_session)
+                except Exception as e:
+                    errors.append(f"{image_session.name} (ROIs Fiji): {e}")
 
             if image_saved:
                 saved_count += 1
@@ -541,6 +621,13 @@ class MainWindow(QMainWindow):
 
         if saved_count > 0:
             QMessageBox.information(self, "Guardar", f"Se guardaron datos de {saved_count} imágenes.")
+
+        if errors:
+            QMessageBox.warning(
+                self,
+                "Guardar (con errores)",
+                "Algunos datos no se pudieron guardar:\n\n" + "\n".join(errors)
+            )
 
     # ======================================================
     # EXPORTAR

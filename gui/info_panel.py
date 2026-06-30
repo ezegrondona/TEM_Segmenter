@@ -6,16 +6,26 @@
 # Panel derecho de información del proyecto.
 # ==========================================================
 
+from PySide6.QtCore import Signal, Qt
+
 from PySide6.QtWidgets import (
     QWidget,
     QLabel,
     QPushButton,
     QVBoxLayout,
-    QGroupBox
+    QHBoxLayout,
+    QGroupBox,
+    QListWidget,
+    QListWidgetItem,
+    QSizePolicy
 )
 
 
 class InfoPanel(QWidget):
+
+    # Señal emitida cuando el usuario pide borrar una segmentación
+    # puntual desde la lista (botón ✕ de esa fila)
+    delete_mask_requested = Signal(int)
 
     def __init__(self):
 
@@ -69,6 +79,31 @@ class InfoPanel(QWidget):
 
         layout.addWidget(info_box)
 
+        # --------------------------------------------------
+        # Lista de segmentaciones aceptadas, con borrado
+        # individual y deshacer (Ctrl+Z se conecta desde
+        # MainWindow, pero usa el mismo mecanismo de borrado).
+        # --------------------------------------------------
+
+        masks_box = QGroupBox("Segmentaciones")
+
+        masks_layout = QVBoxLayout()
+
+        self.masks_hint_label = QLabel(
+            "Clic en ✕ para borrar una segmentación.\n"
+            "Ctrl+Z deshace la última aceptada."
+        )
+        self.masks_hint_label.setWordWrap(True)
+
+        self.masks_list = QListWidget()
+
+        masks_layout.addWidget(self.masks_hint_label)
+        masks_layout.addWidget(self.masks_list)
+
+        masks_box.setLayout(masks_layout)
+
+        layout.addWidget(masks_box)
+
         layout.addStretch()
 
         self.setLayout(layout)
@@ -116,6 +151,47 @@ class InfoPanel(QWidget):
         )
 
     # ======================================================
+    # LISTA DE SEGMENTACIONES (borrado individual)
+    # ======================================================
+
+    def set_masks_list(self, label_ids):
+        """
+        Repuebla la lista de segmentaciones aceptadas con los
+        números de máscara recibidos (uno por fila, con botón
+        de borrado individual).
+        """
+
+        self.masks_list.clear()
+
+        for label_id in label_ids:
+
+            item = QListWidgetItem()
+            item.setData(Qt.UserRole, label_id)
+
+            self.masks_list.addItem(item)
+
+            row_widget = QWidget()
+            row_layout = QHBoxLayout()
+            row_layout.setContentsMargins(4, 2, 4, 2)
+
+            name_label = QLabel(f"Máscara {label_id}")
+            name_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+
+            delete_button = QPushButton("✕")
+            delete_button.setFixedSize(20, 20)
+            delete_button.setToolTip("Borrar esta segmentación")
+            delete_button.clicked.connect(
+                lambda _checked=False, lid=label_id: self.delete_mask_requested.emit(lid)
+            )
+
+            row_layout.addWidget(name_label)
+            row_layout.addWidget(delete_button)
+            row_widget.setLayout(row_layout)
+
+            item.setSizeHint(row_widget.sizeHint())
+            self.masks_list.setItemWidget(item, row_widget)
+
+    # ======================================================
     # LIMPIAR (cuando se cierra la imagen activa)
     # ======================================================
 
@@ -125,3 +201,5 @@ class InfoPanel(QWidget):
         self.size_label.setText("Resolución:\n---")
         self.scale_label.setText("Escala:\nSin calibrar")
         self.status_label.setText("Estado:\nEsperando imagen")
+
+        self.masks_list.clear()

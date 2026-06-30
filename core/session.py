@@ -6,6 +6,8 @@
 # Sesión temporal del programa.
 # ==========================================================
 
+from pathlib import Path
+
 from core.image_session import ImageSession
 
 
@@ -21,7 +23,7 @@ class Session:
 
     def add_image(self, filename):
 
-        filename = str(filename)
+        filename = self._key(filename)
 
         if filename not in self.images:
 
@@ -33,7 +35,7 @@ class Session:
 
     def get_image(self, filename):
 
-        return self.images.get(str(filename))
+        return self.images.get(self._key(filename))
 
     # ======================================================
 
@@ -47,4 +49,26 @@ class Session:
 
     def has_unsaved_changes(self):
 
-        return self.modified
+        return self.modified
+
+    # ======================================================
+    # CLAVE NORMALIZADA
+    # ======================================================
+
+    def _key(self, filename):
+        """
+        Convierte siempre el nombre de archivo a la representación
+        canónica de Path antes de usarlo como clave del diccionario.
+
+        Esto es necesario porque la MISMA imagen puede llegar acá
+        representada de formas distintas según su origen: QFileDialog
+        en Windows devuelve rutas con '/', mientras que el panel de
+        imágenes las guarda como objetos Path (que se convierten a
+        string con '\\'). Sin esta normalización, una misma imagen
+        terminaba creando DOS entradas distintas en self.images, y
+        al volver a ella el programa buscaba en la entrada vacía,
+        dando la sensación de que la calibración y las máscaras
+        habían desaparecido.
+        """
+
+        return str(Path(filename))

@@ -27,6 +27,7 @@ class ImageView(QWidget):
 
     measurement_finished = Signal(float)
     mask_accepted        = Signal(int)     # emite el número de máscara aceptada
+    mask_removed         = Signal(int)     # emite el número de máscara borrada
 
     def __init__(self):
 
@@ -45,6 +46,11 @@ class ImageView(QWidget):
 
         # Estado de la barra espaciadora (pan temporal durante segmentación)
         self._space_held = False
+
+        # Orden en que se fueron aceptando las máscaras de ESTA imagen,
+        # usado para poder deshacer (Ctrl+Z) la última aceptada. Se
+        # reinicia cada vez que se carga una imagen nueva (ver clear()).
+        self._mask_history = []
         
         # Administrador de herramientas
         self.tool_manager = ToolManager()
@@ -120,6 +126,8 @@ class ImageView(QWidget):
         self.measure_layer        = None
         self.temp_mask_layer      = None
         self.accepted_masks_layer = None
+
+        self._mask_history = []
 
     # ======================================================
 
@@ -588,5 +596,78 @@ class ImageView(QWidget):
             except Exception:
                 pass
 
+        self._mask_history.append(new_label)
+
         self.mask_accepted.emit(new_label)
         print(f"Máscara {new_label} aceptada.")
+
+    # ======================================================
+    # BORRAR / DESHACER MÁSCARAS YA ACEPTADAS
+    # ======================================================
+
+    def get_mask_labels(self):
+        """
+        Devuelve la lista ordenada de los números de máscara
+        actualmente aceptados en la imagen mostrada (para poblar
+        el panel de "Segmentaciones" del lado derecho).
+        """
+
+        if self.accepted_masks_layer is None:
+            return []
+
+        labels = np.unique(self.accepted_masks_layer.data)
+
+        return sorted(int(label) for label in labels if label != 0)
+
+    # ======================================================
+
+    def remove_mask(self, label_id):
+        """
+        Borra UNA máscara aceptada específica (por su número),
+        dejando intactas las demás. Devuelve True si se borró
+        algo, False si esa máscara no existía.
+        """
+
+        if self.accepted_masks_layer is None:
+            return False
+
+        data = self.accepted_masks_layer.data
+
+        if not np.any(data == label_id):
+            return False
+
+        new_data = data.copy()
+        new_data[new_data == label_id] = 0
+        self.accepted_masks_layer.data = new_data
+
+        if label_id in self._mask_history:
+            self._mask_history.remove(label_id)
+
+        self.mask_removed.emit(label_id)
+        print(f"Máscara {label_id} borrada.")
+
+        return True
+
+    # ======================================================
+
+    def undo_last_mask(self):
+        """
+        Deshace (borra) la última máscara aceptada en esta imagen
+        desde que se cargó (Ctrl+Z). Devuelve el número de máscara
+        deshecha, o None si no hay nada para deshacer.
+
+        Nota: el historial se reinicia cada vez que se cambia de
+        imagen, así que esto deshace acciones de la sesión de
+        trabajo actual sobre esta imagen, no de corridas anteriores
+        del programa.
+        """
+
+        if not self._mask_history:
+            return None
+
+        label_id = self._mask_history[-1]
+
+        if self.remove_mask(label_id):
+            return label_id
+
+        return None
