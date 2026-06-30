@@ -98,18 +98,18 @@ class ImageView(QWidget):
 
             return False
 
-            elif event.type() == QEvent.KeyRelease:
+        elif event.type() == QEvent.KeyRelease:
 
             if event.key() == Qt.Key_Space:
 
                 print("SPACE UP")
 
-            self._space_held = False
-            self._set_pan_cursor(False)
+                self._space_held = False
+                self._set_pan_cursor(False)
 
             return False
 
-    return super().eventFilter(obj, event)
+        return super().eventFilter(obj, event)
 
     # ======================================================
     # Propiedades de conveniencia
