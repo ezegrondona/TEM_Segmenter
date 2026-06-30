@@ -341,25 +341,6 @@ class ImageView(QWidget):
 
                     self.setFocus()
                 
-        # Convertir coordenadas world → píxeles de imagen
-            coords = self.image_layer.world_to_data(event.position)
-            y, x = int(coords[0]), int(coords[1])
-
-            h, w = self.image_layer.data.shape[:2]
-            if 0 <= y < h and 0 <= x < w:
-                print(f"Clic detectado en ({x}, {y})")
-
-                mask = self.segmenter.predict_point(x, y)
-
-                if mask is not None:
-                    temp_data = np.zeros((h, w), dtype=int)
-                    temp_data[mask] = 1
-                    self.temp_mask_layer.data = temp_data
-                    print("Máscara temporal generada. Presione ENTER para aceptar.")
-
-                    # Dar foco al widget para que keyPressEvent funcione
-                    self.setFocus()
-
     # ======================================================
     # SEGMENTACIÓN MANUAL (Shapes de napari)
     # ======================================================
@@ -467,11 +448,11 @@ class ImageView(QWidget):
     # ======================================================
 
     def keyReleaseEvent(self, event):
+        print("KEY RELEASE", event.key())
         """Detecta cuando se suelta la barra espaciadora para volver a segmentar."""
 
         if event.key() == Qt.Key_Space:
             self._space_held = False
-            self.tool_manager = ToolManager()
             self._set_pan_cursor(False)
             event.accept()
         else:
