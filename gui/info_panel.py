@@ -87,9 +87,11 @@ class InfoPanel(QWidget):
         self.masks_hint_label.setWordWrap(True)
 
         self.masks_list = QListWidget()
+        self.measure_button = QPushButton("📊 Medir Segmentaciones")
 
         masks_layout.addWidget(self.masks_hint_label)
         masks_layout.addWidget(self.masks_list)
+        masks_layout.addWidget(self.measure_button)
 
         masks_box.setLayout(masks_layout)
 

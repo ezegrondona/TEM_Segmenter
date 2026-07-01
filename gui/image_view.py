@@ -324,23 +324,13 @@ class ImageView(QWidget):
 
     def on_mouse_click(self, viewer, event):
 
-        print("\n========== CALLBACK ==========")
-        print("ToolManager :", self.tool_manager.current_tool)
-        print("Interaction :", self.interaction_mode)
-        print("Space held  :", self._space_held)
-        print("Event type  :", event.type)
-
         if self.tool_manager.current_tool != Tool.SAM:
-            print(">>> Sale por ToolManager")
             return
 
         if self._space_held:
-            print(">>> Sale por Space")
             return
 
         if event.type == "mouse_press":
-
-            print("MOUSE PRESS", self.tool_manager.current_tool, self._space_held)
 
             # Convertir coordenadas world → píxeles de imagen
             coords = self.image_layer.world_to_data(event.position)

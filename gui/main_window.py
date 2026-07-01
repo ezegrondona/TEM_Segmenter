@@ -18,6 +18,7 @@ from gui.calibration_dialog import CalibrationDialog
 from gui.export_dialog import ExportDialog
 from gui.image_view import ImageView
 from gui.info_panel import InfoPanel
+from gui.measurements_dialog import MeasurementsDialog
 from gui.project_panel import ProjectPanel
 from settings import PROGRAM_NAME, VERSION
 
@@ -69,6 +70,8 @@ class MainWindow(QMainWindow):
         self.info_panel.delete_mask_requested.connect(self.on_delete_mask_requested)
 
         self.info_panel.load_project_button.clicked.connect(self.load_project_data)
+
+        self.info_panel.measure_button.clicked.connect(self.show_measurements)
 
         self.calibration_dialog.start_measurement.connect(
             self.image_view.start_measurement
@@ -739,6 +742,48 @@ class MainWindow(QMainWindow):
                 QMessageBox.critical(
                     self, "Error", f"Error al exportar la imagen:\n{str(e)}"
                 )
+
+    # ======================================================
+    # MEDICIONES
+    # ======================================================
+
+    def show_measurements(self):
+        if self.current_image is None:
+            QMessageBox.warning(self, "Mediciones", "Primero debe abrir una imagen.")
+            return
+
+        image_session = self.session.get_image(self.current_image)
+        masks = image_session.masks
+
+        if masks is None or not (masks > 0).any():
+            QMessageBox.warning(self, "Mediciones", "No hay segmentaciones para medir.")
+            return
+
+        try:
+            import os
+
+            import imageio.v3 as iio
+
+            from core.measurements import calculate_measurements
+
+            # Cargar imagen original para la intensidad
+            img = iio.imread(self.current_image)
+
+            # Obtener calibración
+            calibration = image_session.calibration
+
+            # Calcular mediciones
+            results = calculate_measurements(masks, img, calibration)
+
+            # Mostrar diálogo
+            name_base = os.path.basename(self.current_image)
+            dialog = MeasurementsDialog(results, name_base, self)
+            dialog.exec()
+
+        except Exception as e:
+            QMessageBox.critical(
+                self, "Error", f"Error al calcular mediciones:\n{str(e)}"
+            )
 
     # ======================================================
     # EVENTOS
