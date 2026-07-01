@@ -32,11 +32,11 @@ class InfoPanel(QWidget):
 
         layout = QVBoxLayout()
 
-        info_box = QGroupBox("Información")
+        info_box = QGroupBox("Información de imagen")
 
         info_layout = QVBoxLayout()
 
-        self.image_label = QLabel("Imagen:\n---")
+        self.image_label = QLabel("Nombre de archivo:\n---")
 
         self.size_label = QLabel("Resolución:\n---")
 
@@ -76,18 +76,15 @@ class InfoPanel(QWidget):
         # MainWindow, pero usa el mismo mecanismo de borrado).
         # --------------------------------------------------
 
-        masks_box = QGroupBox("Segmentaciones")
+        masks_box = QGroupBox("Segmentos")
 
         masks_layout = QVBoxLayout()
 
-        self.masks_hint_label = QLabel(
-            "Clic en ✕ para borrar una segmentación.\n"
-            "Ctrl+Z deshace la última aceptada."
-        )
+        self.masks_hint_label = QLabel()
         self.masks_hint_label.setWordWrap(True)
 
         self.masks_list = QListWidget()
-        self.measure_button = QPushButton("📊 Medir Segmentaciones")
+        self.measure_button = QPushButton("📊 Medir Segmentos")
 
         masks_layout.addWidget(self.masks_hint_label)
         masks_layout.addWidget(self.masks_list)
@@ -155,12 +152,12 @@ class InfoPanel(QWidget):
             row_layout = QHBoxLayout()
             row_layout.setContentsMargins(4, 2, 4, 2)
 
-            name_label = QLabel(f"Máscara {label_id}")
+            name_label = QLabel(f"Segmento {label_id}")
             name_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
 
             delete_button = QPushButton("✕")
             delete_button.setFixedSize(20, 20)
-            delete_button.setToolTip("Borrar esta segmentación")
+            delete_button.setToolTip("Borrar este segmento")
             delete_button.clicked.connect(
                 lambda _checked=False, lid=label_id: self.delete_mask_requested.emit(
                     lid
