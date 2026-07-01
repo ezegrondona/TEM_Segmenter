@@ -4,41 +4,41 @@
 # Archivo: image_view.py
 # ==========================================================
 
-from pathlib import Path
 import math
+from pathlib import Path
 
 import imageio.v3 as iio
 import napari
-from napari.utils.colormaps import DirectLabelColormap
 import numpy as np
 import tifffile
+from napari.utils.colormaps import DirectLabelColormap
+from PySide6.QtCore import Qt, Signal
+from PySide6.QtWidgets import QVBoxLayout, QWidget
 
-from PySide6.QtCore import Signal, Qt
-from core.tool_manager import ToolManager, Tool
-from PySide6.QtWidgets import QWidget, QVBoxLayout
+from core.tool_manager import Tool, ToolManager
 
 # Modos de interacción disponibles
-MODE_NONE      = "none"
-MODE_SAM       = "sam"       # Segmentación automática con clic
-MODE_MANUAL    = "manual"    # Dibujo manual de polígono
+MODE_NONE = "none"
+MODE_SAM = "sam"  # Segmentación automática con clic
+MODE_MANUAL = "manual"  # Dibujo manual de polígono
 
 
 class ImageView(QWidget):
 
     measurement_finished = Signal(float)
-    mask_accepted        = Signal(int)     # emite el número de máscara aceptada
-    mask_removed         = Signal(int)     # emite el número de máscara borrada
+    mask_accepted = Signal(int)  # emite el número de máscara aceptada
+    mask_removed = Signal(int)  # emite el número de máscara borrada
 
     def __init__(self):
 
         super().__init__()
 
-        self.viewer               = None
-        self.image_layer          = None
-        self.measure_layer        = None
+        self.viewer = None
+        self.image_layer = None
+        self.measure_layer = None
 
-        self.segmenter            = None
-        self.temp_mask_layer      = None
+        self.segmenter = None
+        self.temp_mask_layer = None
         self.accepted_masks_layer = None
 
         # Modo activo
@@ -51,7 +51,7 @@ class ImageView(QWidget):
         # usado para poder deshacer (Ctrl+Z) la última aceptada. Se
         # reinicia cada vez que se carga una imagen nueva (ver clear()).
         self._mask_history = []
-        
+
         # Administrador de herramientas
         self.tool_manager = ToolManager()
 
@@ -122,9 +122,9 @@ class ImageView(QWidget):
 
         self.viewer.layers.clear()
 
-        self.image_layer          = None
-        self.measure_layer        = None
-        self.temp_mask_layer      = None
+        self.image_layer = None
+        self.measure_layer = None
+        self.temp_mask_layer = None
         self.accepted_masks_layer = None
 
         self._mask_history = []
@@ -142,17 +142,14 @@ class ImageView(QWidget):
         else:
             image = iio.imread(filename)
 
-        self.image_layer = self.viewer.add_image(
-            image,
-            name=filename.name
-        )
+        self.image_layer = self.viewer.add_image(image, name=filename.name)
 
         self.measure_layer = self.viewer.add_shapes(
             name="Calibration",
             shape_type="line",
             edge_color="yellow",
             edge_width=3,
-            face_color="transparent"
+            face_color="transparent",
         )
 
         self.measure_layer.events.data.connect(self.on_measurement_changed)
@@ -196,10 +193,7 @@ class ImageView(QWidget):
         y1, x1 = line[0]
         y2, x2 = line[1]
 
-        pixels = math.sqrt(
-            (x2 - x1) ** 2 +
-            (y2 - y1) ** 2
-        )
+        pixels = math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
 
         self.measurement_finished.emit(pixels)
 
@@ -223,9 +217,7 @@ class ImageView(QWidget):
                 # con un DirectLabelColormap. La clave "None" actúa como
                 # color por defecto para cualquier etiqueta no nula
                 # -> todo lo seleccionado se ve rojo.
-                colormap=DirectLabelColormap(
-                    color_dict={None: (1.0, 0.0, 0.0, 1.0)}
-                )
+                colormap=DirectLabelColormap(color_dict={None: (1.0, 0.0, 0.0, 1.0)}),
             )
 
         if self.accepted_masks_layer is None:
@@ -236,9 +228,7 @@ class ImageView(QWidget):
                 # Mismo mecanismo: todas las máscaras aprobadas se ven
                 # verdes, sin importar cuántas distintas haya (cada una
                 # mantiene su propio número de etiqueta internamente).
-                colormap=DirectLabelColormap(
-                    color_dict={None: (0.0, 1.0, 0.0, 1.0)}
-                )
+                colormap=DirectLabelColormap(color_dict={None: (0.0, 1.0, 0.0, 1.0)}),
             )
 
     # ======================================================
@@ -294,10 +284,12 @@ class ImageView(QWidget):
 
         print("Preparando modo segmentación...")
         from segmentation.preprocessing import preprocess_image
+
         processed_image = preprocess_image(self.image_layer.data)
 
         if self.segmenter is None:
             from segmentation.predictor import Segmenter
+
             self.segmenter = Segmenter()
 
         self.segmenter.set_image(processed_image)
@@ -313,7 +305,9 @@ class ImageView(QWidget):
         # Dar foco al widget para recibir KeyPressEvent de Qt
         self.setFocus()
 
-        print("Modo segmentación activo. Haga clic en una estructura y presione ENTER para aceptar.")
+        print(
+            "Modo segmentación activo. Haga clic en una estructura y presione ENTER para aceptar."
+        )
 
     # ======================================================
 
@@ -323,7 +317,7 @@ class ImageView(QWidget):
 
         self.interaction_mode = MODE_NONE
         self.tool_manager.activate(Tool.NONE)
-    
+
         print("Modo segmentación finalizado.")
 
     # ======================================================
@@ -370,7 +364,7 @@ class ImageView(QWidget):
                     print("Máscara temporal generada. Presione ENTER para aceptar.")
 
                     self.setFocus()
-                
+
     # ======================================================
     # SEGMENTACIÓN MANUAL (Shapes de napari)
     # ======================================================
@@ -384,7 +378,9 @@ class ImageView(QWidget):
 
         # Si ya existe la capa de shapes manual, reutizarla
         manual_layer_name = "Manual ROI"
-        existing = [l for l in self.viewer.layers if l.name == manual_layer_name]
+        existing = [
+            layer for layer in self.viewer.layers if layer.name == manual_layer_name
+        ]
 
         if existing:
             self.manual_shapes_layer = existing[0]
@@ -394,7 +390,7 @@ class ImageView(QWidget):
                 shape_type="polygon",
                 edge_color="cyan",
                 face_color="transparent",
-                edge_width=2
+                edge_width=2,
             )
 
         # Activar modo dibujo de polígono
@@ -407,7 +403,9 @@ class ImageView(QWidget):
         self.manual_shapes_layer.events.data.connect(self._on_manual_shape_added)
 
         self.setFocus()
-        print("Modo manual activo. Dibuje el contorno haciendo clics y ciérrelo con doble clic.")
+        print(
+            "Modo manual activo. Dibuje el contorno haciendo clics y ciérrelo con doble clic."
+        )
 
     # ======================================================
 
@@ -415,9 +413,14 @@ class ImageView(QWidget):
         self.interaction_mode = MODE_NONE
         self.tool_manager.activate(Tool.NONE)
 
-        if hasattr(self, "manual_shapes_layer") and self.manual_shapes_layer is not None:
+        if (
+            hasattr(self, "manual_shapes_layer")
+            and self.manual_shapes_layer is not None
+        ):
             try:
-                self.manual_shapes_layer.events.data.disconnect(self._on_manual_shape_added)
+                self.manual_shapes_layer.events.data.disconnect(
+                    self._on_manual_shape_added
+                )
             except Exception:
                 pass
             self.manual_shapes_layer.mode = "pan_zoom"
@@ -558,7 +561,10 @@ class ImageView(QWidget):
         if self.temp_mask_layer is not None:
             self.temp_mask_layer.data = np.zeros_like(self.temp_mask_layer.data)
 
-        if self.tool_manager.current_tool == Tool.MANUAL and getattr(self, "manual_shapes_layer", None) is not None:
+        if (
+            self.tool_manager.current_tool == Tool.MANUAL
+            and getattr(self, "manual_shapes_layer", None) is not None
+        ):
             try:
                 self.manual_shapes_layer.data = []
                 # Se reinicia el modo para descartar cualquier vértice
@@ -581,7 +587,7 @@ class ImageView(QWidget):
             return
 
         current_max = int(np.max(self.accepted_masks_layer.data))
-        new_label   = current_max + 1
+        new_label = current_max + 1
 
         accepted_data = self.accepted_masks_layer.data.copy()
         accepted_data[self.temp_mask_layer.data > 0] = new_label
@@ -590,7 +596,10 @@ class ImageView(QWidget):
         self.temp_mask_layer.data = np.zeros_like(self.temp_mask_layer.data)
 
         # Limpiar shapes manuales después de aceptar
-        if hasattr(self, "manual_shapes_layer") and self.manual_shapes_layer is not None:
+        if (
+            hasattr(self, "manual_shapes_layer")
+            and self.manual_shapes_layer is not None
+        ):
             try:
                 self.manual_shapes_layer.data = []
             except Exception:

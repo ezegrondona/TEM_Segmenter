@@ -8,7 +8,6 @@
 
 from pathlib import Path
 
-
 SUPPORTED_EXTENSIONS = (
     ".tif",
     ".tiff",

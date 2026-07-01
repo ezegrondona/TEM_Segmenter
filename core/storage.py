@@ -12,10 +12,10 @@ from pathlib import Path
 import numpy as np
 import tifffile
 
-
 # ==========================================================
 # CALIBRACIÓN
 # ==========================================================
+
 
 def save_calibration(image_session):
     """
@@ -35,7 +35,7 @@ def save_calibration(image_session):
         "pixels": image_session.calibration["pixels"],
         "distance": image_session.calibration["distance"],
         "unit": image_session.calibration["unit"],
-        "pixel_size": image_session.calibration["pixel_size"]
+        "pixel_size": image_session.calibration["pixel_size"],
     }
 
     with open(calibration_file, "w", encoding="utf-8") as f:
@@ -43,6 +43,7 @@ def save_calibration(image_session):
 
 
 # ==========================================================
+
 
 def load_calibration(image_path):
     """
@@ -70,6 +71,7 @@ def load_calibration(image_path):
 # MÁSCARAS / SEGMENTACIONES
 # ==========================================================
 
+
 def save_masks(image_session):
     """
     Guarda la matriz combinada de segmentaciones aceptadas de una
@@ -86,13 +88,11 @@ def save_masks(image_session):
 
     masks_file = data_folder / "masks.tif"
 
-    tifffile.imwrite(
-        masks_file,
-        image_session.masks.astype(np.uint32)
-    )
+    tifffile.imwrite(masks_file, image_session.masks.astype(np.uint32))
 
 
 # ==========================================================
+
 
 def load_masks(image_path):
     """
@@ -118,6 +118,7 @@ def load_masks(image_path):
 # ==========================================================
 # ROIs INDIVIDUALES ESTILO FIJI/IMAGEJ (RoiSet.zip)
 # ==========================================================
+
 
 def save_rois(image_session):
     """
@@ -153,7 +154,7 @@ def save_rois(image_session):
         if label_id == 0:
             continue
 
-        binary = (masks == label_id)
+        binary = masks == label_id
 
         contours = measure.find_contours(binary.astype(float), level=0.5)
 
@@ -169,10 +170,7 @@ def save_rois(image_session):
         # ImageJ/Fiji espera (x, y).
         points = np.column_stack([contour[:, 1], contour[:, 0]])
 
-        roi = roifile.ImagejRoi.frompoints(
-            points,
-            name=f"Mask_{int(label_id):03d}"
-        )
+        roi = roifile.ImagejRoi.frompoints(points, name=f"Mask_{int(label_id):03d}")
 
         rois.append(roi)
 

@@ -30,17 +30,11 @@ def get_image_info(filename):
     width = image.shape[1]
 
     info = {
-
         "name": filename.name,
-
         "width": width,
-
         "height": height,
-
         "scale": "Sin calibrar",
-
-        "status": "Imagen cargada"
-
+        "status": "Imagen cargada",
     }
 
     return info

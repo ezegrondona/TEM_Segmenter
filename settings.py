@@ -15,7 +15,6 @@
 
 from pathlib import Path
 
-
 # ==========================================================
 # INFORMACIÓN GENERAL DEL PROYECTO
 # ==========================================================
@@ -58,4 +57,6 @@ MODEL_FOLDER = RESOURCES_FOLDER / "models"
 MODEL_FILE = MODEL_FOLDER / "mobile_sam.pt"
 
 # URL oficial para descargar los pesos de MobileSAM
-MODEL_URL = "https://github.com/ChaoningZhang/MobileSAM/raw/master/weights/mobile_sam.pt"
+MODEL_URL = (
+    "https://github.com/ChaoningZhang/MobileSAM/raw/master/weights/mobile_sam.pt"
+)

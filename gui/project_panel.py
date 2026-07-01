@@ -6,19 +6,10 @@
 
 from pathlib import Path
 
-from PySide6.QtCore import Signal, Qt
-
-from PySide6.QtWidgets import (
-    QWidget,
-    QLabel,
-    QListWidget,
-    QListWidgetItem,
-    QVBoxLayout,
-    QHBoxLayout,
-    QGroupBox,
-    QPushButton,
-    QSizePolicy
-)
+from PySide6.QtCore import Qt, Signal
+from PySide6.QtWidgets import (QGroupBox, QHBoxLayout, QLabel, QListWidget,
+                               QListWidgetItem, QPushButton, QSizePolicy,
+                               QVBoxLayout, QWidget)
 
 
 class ProjectPanel(QWidget):
@@ -52,9 +43,7 @@ class ProjectPanel(QWidget):
 
         self.image_list = QListWidget()
 
-        self.image_list.currentRowChanged.connect(
-            self.on_selection_changed
-        )
+        self.image_list.currentRowChanged.connect(self.on_selection_changed)
 
         project_layout.addWidget(self.folder_label)
         project_layout.addWidget(self.image_list)
@@ -73,9 +62,7 @@ class ProjectPanel(QWidget):
 
         folder = Path(folder)
 
-        self.folder_label.setText(
-            f"Carpeta abierta:\n{folder.name}"
-        )
+        self.folder_label.setText(f"Carpeta abierta:\n{folder.name}")
 
     # ======================================================
     # AGREGAR IMÁGENES (sin borrar las que ya estaban abiertas)

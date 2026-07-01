@@ -6,19 +6,10 @@
 # Ventana de calibración
 # ==========================================================
 
-from PySide6.QtWidgets import (
-    QDialog,
-    QLabel,
-    QPushButton,
-    QVBoxLayout,
-    QHBoxLayout,
-    QGroupBox,
-    QLineEdit,
-    QComboBox,
-    QMessageBox
-)
-
-from PySide6.QtCore import Signal, Qt
+from PySide6.QtCore import Qt, Signal
+from PySide6.QtWidgets import (QComboBox, QDialog, QGroupBox, QHBoxLayout,
+                               QLabel, QLineEdit, QMessageBox, QPushButton,
+                               QVBoxLayout)
 
 
 class CalibrationDialog(QDialog):
@@ -59,9 +50,7 @@ class CalibrationDialog(QDialog):
 
         measurement_layout = QVBoxLayout()
 
-        self.measure_button = QPushButton(
-            "✏ Medir sobre la imagen"
-        )
+        self.measure_button = QPushButton("✏ Medir sobre la imagen")
 
         self.pixel_label = QLabel("---")
 
@@ -88,9 +77,7 @@ class CalibrationDialog(QDialog):
 
         self.distance_edit = QLineEdit()
 
-        self.distance_edit.setPlaceholderText(
-            "Ej: 2"
-        )
+        self.distance_edit.setPlaceholderText("Ej: 2")
 
         distance_layout.addWidget(self.distance_edit)
 
@@ -106,11 +93,7 @@ class CalibrationDialog(QDialog):
 
         self.unit_combo = QComboBox()
 
-        self.unit_combo.addItems([
-            "nm",
-            "µm",
-            "mm"
-        ])
+        self.unit_combo.addItems(["nm", "µm", "mm"])
 
         unit_layout.addWidget(self.unit_combo)
 
@@ -148,17 +131,11 @@ class CalibrationDialog(QDialog):
         # Conexiones
         # --------------------------------------------------
 
-        self.measure_button.clicked.connect(
-            self.start_measurement.emit
-        )
+        self.measure_button.clicked.connect(self.start_measurement.emit)
 
-        self.cancel_button.clicked.connect(
-            self.reject
-        )
+        self.cancel_button.clicked.connect(self.reject)
 
-        self.save_button.clicked.connect(
-            self.save_calibration
-        )
+        self.save_button.clicked.connect(self.save_calibration)
 
     # ======================================================
 
@@ -166,9 +143,7 @@ class CalibrationDialog(QDialog):
 
         self.pixels = pixels
 
-        self.pixel_label.setText(
-            f"{pixels:.2f} px"
-        )
+        self.pixel_label.setText(f"{pixels:.2f} px")
 
     # ======================================================
 
@@ -177,9 +152,7 @@ class CalibrationDialog(QDialog):
         if self.pixels is None:
 
             QMessageBox.warning(
-                self,
-                "Calibración",
-                "Primero debe medir la barra de escala."
+                self, "Calibración", "Primero debe medir la barra de escala."
             )
 
             return
@@ -188,40 +161,22 @@ class CalibrationDialog(QDialog):
 
         if not text:
 
-            QMessageBox.warning(
-                self,
-                "Calibración",
-                "Ingrese la distancia conocida."
-            )
+            QMessageBox.warning(self, "Calibración", "Ingrese la distancia conocida.")
 
             return
 
         try:
 
-            distance = float(
-                text.replace(",", ".")
-            )
+            distance = float(text.replace(",", "."))
 
         except ValueError:
 
-            QMessageBox.warning(
-                self,
-                "Calibración",
-                "La distancia debe ser un número."
-            )
+            QMessageBox.warning(self, "Calibración", "La distancia debe ser un número.")
 
             return
 
         unit = self.unit_combo.currentText()
 
-        self.calibration_saved.emit(
-
-            self.pixels,
-
-            distance,
-
-            unit
-
-        )
+        self.calibration_saved.emit(self.pixels, distance, unit)
 
         self.accept()

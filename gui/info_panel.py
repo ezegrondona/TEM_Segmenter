@@ -6,19 +6,10 @@
 # Panel derecho de información del proyecto.
 # ==========================================================
 
-from PySide6.QtCore import Signal, Qt
-
-from PySide6.QtWidgets import (
-    QWidget,
-    QLabel,
-    QPushButton,
-    QVBoxLayout,
-    QHBoxLayout,
-    QGroupBox,
-    QListWidget,
-    QListWidgetItem,
-    QSizePolicy
-)
+from PySide6.QtCore import Qt, Signal
+from PySide6.QtWidgets import (QGroupBox, QHBoxLayout, QLabel, QListWidget,
+                               QListWidgetItem, QPushButton, QSizePolicy,
+                               QVBoxLayout, QWidget)
 
 
 class InfoPanel(QWidget):
@@ -54,7 +45,7 @@ class InfoPanel(QWidget):
         self.status_label = QLabel("Estado:\nEsperando imagen")
 
         self.calibrate_button = QPushButton("📏 Calibrar")
-        
+
         self.segment_button = QPushButton("▶ Segmentación Automática")
 
         self.manual_segment_button = QPushButton("✏️ Segmentación manual")
@@ -114,21 +105,13 @@ class InfoPanel(QWidget):
 
     def update_info(self, info):
 
-        self.image_label.setText(
-            f"Imagen:\n{info['name']}"
-        )
+        self.image_label.setText(f"Imagen:\n{info['name']}")
 
-        self.size_label.setText(
-            f"Resolución:\n{info['width']} × {info['height']}"
-        )
+        self.size_label.setText(f"Resolución:\n{info['width']} × {info['height']}")
 
-        self.scale_label.setText(
-            f"Escala:\n{info['scale']}"
-        )
+        self.scale_label.setText(f"Escala:\n{info['scale']}")
 
-        self.status_label.setText(
-            f"Estado:\n{info['status']}"
-        )
+        self.status_label.setText(f"Estado:\n{info['status']}")
 
     # ======================================================
     # ACTUALIZAR ESCALA
@@ -136,9 +119,7 @@ class InfoPanel(QWidget):
 
     def update_scale(self, text):
 
-        self.scale_label.setText(
-            f"Escala:\n{text}"
-        )
+        self.scale_label.setText(f"Escala:\n{text}")
 
     # ======================================================
     # ACTUALIZAR ESTADO
@@ -146,9 +127,7 @@ class InfoPanel(QWidget):
 
     def update_status(self, text):
 
-        self.status_label.setText(
-            f"Estado:\n{text}"
-        )
+        self.status_label.setText(f"Estado:\n{text}")
 
     # ======================================================
     # LISTA DE SEGMENTACIONES (borrado individual)
@@ -181,7 +160,9 @@ class InfoPanel(QWidget):
             delete_button.setFixedSize(20, 20)
             delete_button.setToolTip("Borrar esta segmentación")
             delete_button.clicked.connect(
-                lambda _checked=False, lid=label_id: self.delete_mask_requested.emit(lid)
+                lambda _checked=False, lid=label_id: self.delete_mask_requested.emit(
+                    lid
+                )
             )
 
             row_layout.addWidget(name_label)

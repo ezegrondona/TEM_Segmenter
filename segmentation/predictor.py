@@ -8,12 +8,14 @@
 # ==========================================================
 
 import urllib.request
-import torch
+
 import cv2
 import numpy as np
+import torch
+from mobile_sam import SamPredictor, sam_model_registry
 
-from mobile_sam import sam_model_registry, SamPredictor
-from settings import MODEL_FILE, MODEL_URL, MODEL_FOLDER
+from settings import MODEL_FILE, MODEL_FOLDER, MODEL_URL
+
 
 class Segmenter:
     def __init__(self):
@@ -29,7 +31,7 @@ class Segmenter:
         if not MODEL_FILE.exists():
             print(f"Modelo no encontrado en {MODEL_FILE}. Descargando...")
             MODEL_FOLDER.mkdir(parents=True, exist_ok=True)
-            
+
             try:
                 urllib.request.urlretrieve(MODEL_URL, MODEL_FILE)
                 print("Descarga completada con éxito.")
@@ -44,16 +46,16 @@ class Segmenter:
         """
         if not self.check_and_download_model():
             raise RuntimeError("No se pudo obtener el modelo MobileSAM.")
-            
+
         print(f"Inicializando MobileSAM en {self.device}...")
-        
+
         # MobileSAM usa el tipo de modelo "vit_t"
         model_type = "vit_t"
-        
+
         sam = sam_model_registry[model_type](checkpoint=str(MODEL_FILE))
         sam.to(device=self.device)
         sam.eval()
-        
+
         self.predictor = SamPredictor(sam)
         print("MobileSAM inicializado.")
 
@@ -64,7 +66,7 @@ class Segmenter:
         """
         if self.predictor is None:
             self.initialize()
-            
+
         # SAM espera RGB, ImageIO/tifffile devuelven 2D para grises.
         if len(image.shape) == 2:
             image_rgb = cv2.cvtColor(image, cv2.COLOR_GRAY2RGB)
@@ -72,8 +74,8 @@ class Segmenter:
             # RGBA a RGB
             image_rgb = cv2.cvtColor(image, cv2.COLOR_RGBA2RGB)
         else:
-            image_rgb = image 
-            
+            image_rgb = image
+
         print("Calculando embeddings de la imagen (esto puede tardar)...")
         self.predictor.set_image(image_rgb)
         self.image_set = True
@@ -85,15 +87,15 @@ class Segmenter:
         """
         if not self.image_set:
             return None
-            
+
         # MobileSAM espera (x, y) donde x es columna y y es fila
         input_point = np.array([[x, y]])
-        input_label = np.array([1]) # 1 indica punto positivo (foreground)
-        
+        input_label = np.array([1])  # 1 indica punto positivo (foreground)
+
         masks, scores, logits = self.predictor.predict(
             point_coords=input_point,
             point_labels=input_label,
-            multimask_output=False # Pedimos solo la mejor máscara
+            multimask_output=False,  # Pedimos solo la mejor máscara
         )
-        
+
         return masks[0]

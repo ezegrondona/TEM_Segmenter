@@ -82,12 +82,7 @@ class ImageSession:
 
     # ======================================================
 
-    def set_calibration(
-        self,
-        pixels,
-        distance,
-        unit
-    ):
+    def set_calibration(self, pixels, distance, unit):
         """
         Guarda la calibración de la imagen.
         """
@@ -96,15 +91,10 @@ class ImageSession:
         distance = float(distance)
 
         self.calibration = {
-
             "pixels": pixels,
-
             "distance": distance,
-
             "unit": unit,
-
-            "pixel_size": distance / pixels
-
+            "pixel_size": distance / pixels,
         }
 
     # ======================================================

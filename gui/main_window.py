@@ -4,31 +4,21 @@
 # Archivo: main_window.py
 # ==========================================================
 
+from PySide6.QtCore import Qt
 from PySide6.QtGui import QAction, QKeySequence, QShortcut
-from PySide6.QtCore import Qt, QThread, Signal as QtSignal
-from PySide6.QtWidgets import (
-    QMainWindow,
-    QWidget,
-    QSplitter,
-    QVBoxLayout,
-    QFileDialog,
-    QMessageBox,
-    QDialog,
-    QLabel,
-    QProgressBar
-)
+from PySide6.QtWidgets import (QDialog, QFileDialog, QLabel, QMainWindow,
+                               QMessageBox, QProgressBar, QSplitter,
+                               QVBoxLayout, QWidget)
 
-from settings import PROGRAM_NAME, VERSION
-
-from gui.project_panel import ProjectPanel
-from gui.info_panel import InfoPanel
-from gui.image_view import ImageView
-from gui.calibration_dialog import CalibrationDialog
-
-from core.image_loader import find_images
-from core.image_info import get_image_info
-from core.session import Session
 from core import storage
+from core.image_info import get_image_info
+from core.image_loader import find_images
+from core.session import Session
+from gui.calibration_dialog import CalibrationDialog
+from gui.image_view import ImageView
+from gui.info_panel import InfoPanel
+from gui.project_panel import ProjectPanel
+from settings import PROGRAM_NAME, VERSION
 
 
 class MainWindow(QMainWindow):
@@ -59,57 +49,35 @@ class MainWindow(QMainWindow):
         # Conexiones
         # --------------------------------------------------
 
-        self.project_panel.image_selected.connect(
-            self.load_image
-        )
+        self.project_panel.image_selected.connect(self.load_image)
 
-        self.project_panel.image_closed.connect(
-            self.on_image_closed
-        )
+        self.project_panel.image_closed.connect(self.on_image_closed)
 
-        self.info_panel.calibrate_button.clicked.connect(
-            self.open_calibration
-        )
-        
-        self.info_panel.segment_button.clicked.connect(
-            self.toggle_segmentation
-        )
+        self.info_panel.calibrate_button.clicked.connect(self.open_calibration)
+
+        self.info_panel.segment_button.clicked.connect(self.toggle_segmentation)
 
         self.info_panel.manual_segment_button.clicked.connect(
             self.toggle_manual_segmentation
         )
-        
-        self.image_view.mask_accepted.connect(
-            self.on_mask_accepted
-        )
 
-        self.image_view.mask_removed.connect(
-            self.on_mask_removed
-        )
+        self.image_view.mask_accepted.connect(self.on_mask_accepted)
 
-        self.info_panel.delete_mask_requested.connect(
-            self.on_delete_mask_requested
-        )
+        self.image_view.mask_removed.connect(self.on_mask_removed)
 
-        self.info_panel.load_project_button.clicked.connect(
-            self.load_project_data
-        )
+        self.info_panel.delete_mask_requested.connect(self.on_delete_mask_requested)
+
+        self.info_panel.load_project_button.clicked.connect(self.load_project_data)
 
         self.calibration_dialog.start_measurement.connect(
             self.image_view.start_measurement
         )
 
-        self.image_view.measurement_finished.connect(
-            self.calibration_dialog.set_pixels
-        )
+        self.image_view.measurement_finished.connect(self.calibration_dialog.set_pixels)
 
-        self.calibration_dialog.finished.connect(
-            self.image_view.stop_measurement
-        )
+        self.calibration_dialog.finished.connect(self.image_view.stop_measurement)
 
-        self.calibration_dialog.calibration_saved.connect(
-            self.save_calibration
-        )
+        self.calibration_dialog.calibration_saved.connect(self.save_calibration)
 
         # --------------------------------------------------
         # Atajo de teclado: Ctrl+Z deshace la última
@@ -169,15 +137,10 @@ class MainWindow(QMainWindow):
         # Abrir imagen
         # ----------------------------------------------
 
-        open_image_action = QAction(
-            "Abrir imagen...",
-            self
-        )
+        open_image_action = QAction("Abrir imagen...", self)
         open_image_action.setShortcut(QKeySequence("Ctrl+O"))
 
-        open_image_action.triggered.connect(
-            self.open_image
-        )
+        open_image_action.triggered.connect(self.open_image)
 
         file_menu.addAction(open_image_action)
 
@@ -185,15 +148,10 @@ class MainWindow(QMainWindow):
         # Abrir carpeta
         # ----------------------------------------------
 
-        open_folder_action = QAction(
-            "Abrir carpeta...",
-            self
-        )
+        open_folder_action = QAction("Abrir carpeta...", self)
         open_folder_action.setShortcut(QKeySequence("Ctrl+Shift+O"))
 
-        open_folder_action.triggered.connect(
-            self.open_folder
-        )
+        open_folder_action.triggered.connect(self.open_folder)
 
         file_menu.addAction(open_folder_action)
 
@@ -203,15 +161,10 @@ class MainWindow(QMainWindow):
         # Guardar
         # ----------------------------------------------
 
-        save_action = QAction(
-            "Guardar",
-            self
-        )
+        save_action = QAction("Guardar", self)
         save_action.setShortcut(QKeySequence("Ctrl+S"))
 
-        save_action.triggered.connect(
-            self.save_project
-        )
+        save_action.triggered.connect(self.save_project)
 
         file_menu.addAction(save_action)
 
@@ -221,14 +174,9 @@ class MainWindow(QMainWindow):
         # Exportar
         # ----------------------------------------------
 
-        export_action = QAction(
-            "Exportar...",
-            self
-        )
+        export_action = QAction("Exportar...", self)
 
-        export_action.triggered.connect(
-            self.export_project
-        )
+        export_action.triggered.connect(self.export_project)
 
         file_menu.addAction(export_action)
 
@@ -238,14 +186,9 @@ class MainWindow(QMainWindow):
         # Salir
         # ----------------------------------------------
 
-        exit_action = QAction(
-            "Salir",
-            self
-        )
+        exit_action = QAction("Salir", self)
 
-        exit_action.triggered.connect(
-            self.close
-        )
+        exit_action.triggered.connect(self.close)
 
         file_menu.addAction(exit_action)
 
@@ -256,15 +199,10 @@ class MainWindow(QMainWindow):
     def open_image(self):
 
         filenames, _ = QFileDialog.getOpenFileNames(
-
             self,
-
             "Abrir imagen(es)",
-
             "",
-
-            "Imágenes (*.tif *.tiff *.png *.jpg *.jpeg *.bmp)"
-
+            "Imágenes (*.tif *.tiff *.png *.jpg *.jpeg *.bmp)",
         )
 
         if not filenames:
@@ -282,13 +220,7 @@ class MainWindow(QMainWindow):
 
     def open_folder(self):
 
-        folder = QFileDialog.getExistingDirectory(
-
-            self,
-
-            "Seleccionar carpeta"
-
-        )
+        folder = QFileDialog.getExistingDirectory(self, "Seleccionar carpeta")
 
         if not folder:
             return
@@ -298,7 +230,9 @@ class MainWindow(QMainWindow):
         found_images = find_images(folder)
 
         if not found_images:
-            QMessageBox.information(self, "Abrir carpeta", "No se encontraron imágenes en esa carpeta.")
+            QMessageBox.information(
+                self, "Abrir carpeta", "No se encontraron imágenes en esa carpeta."
+            )
             return
 
         self.project_panel.add_images(found_images)
@@ -347,11 +281,8 @@ class MainWindow(QMainWindow):
         if image_session.calibrated:
 
             info["scale"] = (
-
                 f'{image_session.calibration["pixel_size"]:.6f} '
-
                 f'{image_session.calibration["unit"]}/px'
-
             )
 
             info["status"] = "Calibrada"
@@ -365,11 +296,12 @@ class MainWindow(QMainWindow):
     def on_image_closed(self, filename):
         """
         Se llama cuando el usuario cierra una imagen desde la lista
-        del panel izquierdo. Si la imagen cerrada era la que estaba
-        mostrándose, limpia el visor; los datos en memoria de esa
-        imagen (calibración/máscaras) se conservan en self.session
-        por si se vuelve a abrir en la misma corrida del programa.
+        del panel izquierdo. Limpia el visor y borra los datos en
+        memoria de esa imagen para que, si se vuelve a abrir, empiece
+        limpia y el usuario deba cargar el proyecto manualmente.
         """
+
+        self.session.remove_image(filename)
 
         if str(self.current_image) != str(filename):
             return
@@ -400,47 +332,19 @@ class MainWindow(QMainWindow):
 
     # ======================================================
 
-    def save_calibration(
-
-        self,
-
-        pixels,
-
-        distance,
-
-        unit
-
-    ):
+    def save_calibration(self, pixels, distance, unit):
 
         if self.current_image is None:
             return
 
-        image_session = self.session.get_image(
+        image_session = self.session.get_image(self.current_image)
 
-            self.current_image
-
-        )
-
-        image_session.set_calibration(
-
-            pixels,
-
-            distance,
-
-            unit
-
-        )
+        image_session.set_calibration(pixels, distance, unit)
         self.session.modified = True
 
         info = get_image_info(self.current_image)
 
-        info["scale"] = (
-
-            f'{image_session.calibration["pixel_size"]:.6f} '
-
-            f'{unit}/px'
-
-        )
+        info["scale"] = f'{image_session.calibration["pixel_size"]:.6f} ' f"{unit}/px"
 
         info["status"] = "Calibrada"
 
@@ -474,16 +378,16 @@ class MainWindow(QMainWindow):
 
         dlg = QDialog(self)
         dlg.setWindowTitle("Segmentación")
-        dlg.setWindowFlags(
-            Qt.Dialog | Qt.CustomizeWindowHint | Qt.WindowTitleHint
-        )
+        dlg.setWindowFlags(Qt.Dialog | Qt.CustomizeWindowHint | Qt.WindowTitleHint)
         dlg.setFixedSize(340, 90)
 
-        lbl = QLabel("  Procesando imagen para su segmentación...\n  Por favor, espere.", dlg)
+        lbl = QLabel(
+            "  Procesando imagen para su segmentación...\n  Por favor, espere.", dlg
+        )
         lbl.setAlignment(Qt.AlignCenter)
 
         bar = QProgressBar(dlg)
-        bar.setRange(0, 0)          # modo indeterminado (animado)
+        bar.setRange(0, 0)  # modo indeterminado (animado)
         bar.setTextVisible(False)
 
         lay = QVBoxLayout(dlg)
@@ -495,13 +399,16 @@ class MainWindow(QMainWindow):
         # pero mostrando el diálogo antes (procesEvents)
         dlg.show()
         from PySide6.QtWidgets import QApplication
+
         QApplication.processEvents()
 
         try:
             self.image_view.start_segmentation()
         except Exception as e:
             dlg.close()
-            QMessageBox.critical(self, "Error", f"Error al inicializar la segmentación:\n{e}")
+            QMessageBox.critical(
+                self, "Error", f"Error al inicializar la segmentación:\n{e}"
+            )
             return
 
         dlg.close()
@@ -620,13 +527,15 @@ class MainWindow(QMainWindow):
         self.session.modified = False
 
         if saved_count > 0:
-            QMessageBox.information(self, "Guardar", f"Se guardaron datos de {saved_count} imágenes.")
+            QMessageBox.information(
+                self, "Guardar", f"Se guardaron datos de {saved_count} imágenes."
+            )
 
         if errors:
             QMessageBox.warning(
                 self,
                 "Guardar (con errores)",
-                "Algunos datos no se pudieron guardar:\n\n" + "\n".join(errors)
+                "Algunos datos no se pudieron guardar:\n\n" + "\n".join(errors),
             )
 
     # ======================================================
@@ -642,22 +551,24 @@ class MainWindow(QMainWindow):
     # ======================================================
 
     def load_project_data(self):
-        
+
         if self.current_image is None:
-            QMessageBox.warning(self, "Cargar proyecto", "Primero debe abrir una imagen.")
+            QMessageBox.warning(
+                self, "Cargar proyecto", "Primero debe abrir una imagen."
+            )
             return
-            
+
         folder = QFileDialog.getExistingDirectory(
-            self,
-            "Seleccionar carpeta de datos del proyecto"
+            self, "Seleccionar carpeta de datos del proyecto"
         )
-        
+
         if not folder:
             return
-            
+
         from pathlib import Path
+
         folder_path = Path(folder)
-        
+
         calibration_file = folder_path / "calibration.json"
         masks_file = folder_path / "masks.tif"
 
@@ -667,30 +578,32 @@ class MainWindow(QMainWindow):
 
         if calibration_file.exists():
             import json
+
             try:
                 with open(calibration_file, "r", encoding="utf-8") as f:
                     data = json.load(f)
-                    
+
                 image_session.set_calibration(
-                    data["pixels"],
-                    data["distance"],
-                    data["unit"]
+                    data["pixels"], data["distance"], data["unit"]
                 )
                 self.session.modified = True
-                
+
                 info = get_image_info(self.current_image)
-                info["scale"] = f'{image_session.calibration["pixel_size"]:.6f} {data["unit"]}/px'
+                info["scale"] = (
+                    f'{image_session.calibration["pixel_size"]:.6f} {data["unit"]}/px'
+                )
                 info["status"] = "Calibrada (Importada)"
                 self.info_panel.update_info(info)
 
                 loaded_something = True
-                
+
             except Exception as e:
                 QMessageBox.critical(self, "Error", f"Error al cargar calibración: {e}")
 
         if masks_file.exists():
             try:
                 import tifffile
+
                 masks_array = tifffile.imread(masks_file)
 
                 image_session.set_masks(masks_array)
@@ -703,22 +616,29 @@ class MainWindow(QMainWindow):
                 QMessageBox.critical(self, "Error", f"Error al cargar máscaras: {e}")
 
         if loaded_something:
-            QMessageBox.information(self, "Cargar proyecto", "Datos cargados correctamente.")
+            QMessageBox.information(
+                self, "Cargar proyecto", "Datos cargados correctamente."
+            )
         else:
-            QMessageBox.information(self, "Cargar proyecto", "No se encontraron datos de calibración ni máscaras en la carpeta seleccionada.")
+            QMessageBox.information(
+                self,
+                "Cargar proyecto",
+                "No se encontraron datos de calibración ni máscaras en la carpeta seleccionada.",
+            )
 
     # ======================================================
     # EVENTOS
     # ======================================================
 
     def closeEvent(self, event):
-        
+
         if self.session.has_unsaved_changes():
             reply = QMessageBox.question(
-                self, 'Guardar cambios',
+                self,
+                "Guardar cambios",
                 "Hay cambios sin guardar. ¿Desea guardarlos antes de salir?",
                 QMessageBox.Save | QMessageBox.Discard | QMessageBox.Cancel,
-                QMessageBox.Save
+                QMessageBox.Save,
             )
 
             if reply == QMessageBox.Save:

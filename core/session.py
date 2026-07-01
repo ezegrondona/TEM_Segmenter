@@ -47,6 +47,15 @@ class Session:
 
     # ======================================================
 
+    def remove_image(self, filename):
+
+        filename = self._key(filename)
+
+        if filename in self.images:
+            del self.images[filename]
+
+    # ======================================================
+
     def has_unsaved_changes(self):
 
         return self.modified
