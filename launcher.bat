@@ -7,25 +7,38 @@ echo ===================================================
 echo   TEM Segmenter - Inicializando...
 echo ===================================================
 
-:: 1. Verificar si Python esta instalado
+:: 1. Verificar que Python este instalado
 python --version >nul 2>&1
 if %errorlevel% neq 0 (
+    echo.
     echo [ERROR] No se detecto Python instalado o no esta en el PATH de Windows.
     echo.
-    echo El programa necesita que instales Python 3.9 o superior.
-    echo ATENCION: Durante la instalacion de Python, asegurate de marcar
-    echo la casilla "Add python.exe to PATH".
+    echo El programa necesita Python 3.9 o superior.
+    echo IMPORTANTE: Durante la instalacion, marcar "Add python.exe to PATH".
     echo.
-    echo Abriendo la pagina oficial de descarga de Python...
+    echo Abriendo la pagina de descarga...
     start https://www.python.org/downloads/
     pause
     exit /b 1
 )
 
-:: 2. Crear entorno virtual (solo la primera vez)
+:: 2. Verificar que Git este instalado (necesario para instalar MobileSAM)
+git --version >nul 2>&1
+if %errorlevel% neq 0 (
+    echo.
+    echo [ERROR] No se detecto Git instalado. Git es necesario para descargar el
+    echo modelo de inteligencia artificial en la primera ejecucion.
+    echo.
+    echo Abriendo la pagina de descarga de Git...
+    start https://git-scm.com/download/win
+    pause
+    exit /b 1
+)
+
+:: 3. Crear entorno virtual (solo la primera vez)
 if not exist "venv\Scripts\python.exe" (
     echo.
-    echo [1/3] Creando entorno virtual aislado (esto ocurre solo la primera vez)...
+    echo [1/3] Creando entorno virtual aislado (ocurre solo la primera vez)...
     python -m venv venv
     if %errorlevel% neq 0 (
         echo [ERROR] No se pudo crear el entorno virtual. Verifica tus permisos.
@@ -34,25 +47,25 @@ if not exist "venv\Scripts\python.exe" (
     )
 )
 
-:: 3. Activar e Instalar dependencias
+:: 4. Instalar dependencias si faltan
 call venv\Scripts\activate.bat
 
 python -c "import PySide6, napari, torch, mobile_sam" >nul 2>&1
 if %errorlevel% neq 0 (
     echo.
-    echo [2/3] Instalando dependencias necesarias por primera vez...
-    echo Esto descargara los paquetes desde internet. Puede tardar varios minutos dependiendo de tu conexion.
+    echo [2/3] Instalando dependencias por primera vez...
+    echo Esto descargara archivos desde internet. Puede tardar varios minutos.
     python -m pip install --upgrade pip >nul 2>&1
     pip install -r requirements.txt
     if %errorlevel% neq 0 (
-        echo [ERROR] Hubo un problema al descargar las dependencias. Verifica tu conexion a internet.
+        echo [ERROR] Problema al instalar dependencias. Verifica tu conexion a internet.
         pause
         exit /b 1
     )
-    echo [INFO] Instalacion completada con exito.
+    echo [INFO] Instalacion completada.
 )
 
-:: 4. Iniciar la aplicacion
+:: 5. Iniciar la aplicacion (sin ventana de consola)
 echo.
 echo [3/3] Iniciando aplicacion...
-start "" pythonw main.py
+start "" "%~dp0venv\Scripts\pythonw.exe" "%~dp0main.py"

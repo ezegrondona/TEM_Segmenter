@@ -10,7 +10,10 @@ import json
 from pathlib import Path
 
 import numpy as np
+import roifile
 import tifffile
+from skimage import measure
+
 
 # ==========================================================
 # CALIBRACIÓN
@@ -42,26 +45,20 @@ def save_calibration(image_session):
         json.dump(data, f, indent=4, ensure_ascii=False)
 
 
-# ==========================================================
-
-
-def load_calibration(image_path):
+def load_calibration(data_folder):
     """
-    Carga la calibración de una imagen desde su carpeta de datos.
-    Retorna un diccionario con los datos o None si no existe.
+    Carga la calibración desde una carpeta de datos.
+    Retorna un diccionario o None si no existe o falla.
     """
 
-    image_path = Path(image_path)
-    data_folder = image_path.parent / image_path.stem
-    calibration_file = data_folder / "calibration.json"
+    calibration_file = Path(data_folder) / "calibration.json"
 
     if not calibration_file.exists():
         return None
 
     try:
         with open(calibration_file, "r", encoding="utf-8") as f:
-            data = json.load(f)
-            return data
+            return json.load(f)
     except Exception as e:
         print(f"Error al cargar calibración: {e}")
         return None
@@ -74,10 +71,8 @@ def load_calibration(image_path):
 
 def save_masks(image_session):
     """
-    Guarda la matriz combinada de segmentaciones aceptadas de una
-    imagen en su carpeta de datos, como TIFF de enteros sin signo.
-    Se guarda como TIFF (y no como JSON) para que sea directamente
-    compatible con Fiji/ImageJ.
+    Guarda la matriz combinada de segmentaciones aceptadas como TIFF.
+    Se necesita para poder recargar el proyecto y seguir editando.
     """
 
     if not image_session.has_masks:
@@ -91,19 +86,13 @@ def save_masks(image_session):
     tifffile.imwrite(masks_file, image_session.masks.astype(np.uint32))
 
 
-# ==========================================================
-
-
-def load_masks(image_path):
+def load_masks(data_folder):
     """
-    Carga la matriz de segmentaciones guardada para una imagen,
-    si existe. Retorna un array de numpy o None si no existe o
-    si ocurre un error al leerlo.
+    Carga la matriz de segmentaciones desde una carpeta de datos.
+    Retorna un array de numpy o None si no existe o falla.
     """
 
-    image_path = Path(image_path)
-    data_folder = image_path.parent / image_path.stem
-    masks_file = data_folder / "masks.tif"
+    masks_file = Path(data_folder) / "masks.tif"
 
     if not masks_file.exists():
         return None
@@ -122,27 +111,18 @@ def load_masks(image_path):
 
 def save_rois(image_session):
     """
-    Convierte cada segmentación aceptada (cada etiqueta distinta
-    de la máscara combinada) en un ROI individual tipo ImageJ
-    (FREEHAND, a partir del contorno de la región) y los guarda
-    todos juntos en RoiSet.zip dentro de la carpeta de datos de
-    la imagen.
+    Convierte cada segmentación aceptada en un ROI individual tipo
+    ImageJ (FREEHAND) y los guarda en RoiSet.zip.
 
-    Ese archivo se abre directo en Fiji (arrastrándolo a la
-    barra de Fiji, o desde el ROI Manager con "More >> Open..."),
-    y una vez cargado cada ROI puede seleccionarse o eliminarse
-    de forma individual desde el ROI Manager, igual que si se
-    hubieran dibujado a mano ahí.
+    Se abre en Fiji arrastrando el .zip a la barra, o desde el
+    ROI Manager con "More >> Open...". Cada ROI puede seleccionarse
+    o eliminarse de forma individual desde el ROI Manager.
 
-    No requiere que la imagen esté calibrada: los ROIs se guardan
-    en coordenadas de píxel, como espera Fiji.
+    Los ROIs se guardan en coordenadas de píxel (sin calibración).
     """
 
     if not image_session.has_masks:
         return
-
-    import roifile
-    from skimage import measure
 
     masks = image_session.masks
     labels = np.unique(masks)
@@ -161,13 +141,12 @@ def save_rois(image_session):
         if not contours:
             continue
 
-        # Si una etiqueta quedó partida en más de un contorno
-        # (por ejemplo, dos clics que generaron regiones separadas
-        # con la misma etiqueta), se usa el contorno más largo.
+        # Si hay más de un contorno (regiones desconectadas),
+        # se usa el más largo.
         contour = max(contours, key=len)
 
         # find_contours devuelve (fila, columna) = (y, x);
-        # ImageJ/Fiji espera (x, y).
+        # ImageJ espera (x, y).
         points = np.column_stack([contour[:, 1], contour[:, 0]])
 
         roi = roifile.ImagejRoi.frompoints(points, name=f"Mask_{int(label_id):03d}")
@@ -182,6 +161,5 @@ def save_rois(image_session):
 
     roiset_file = data_folder / "RoiSet.zip"
 
-    # mode="w" sobrescribe el zip anterior en vez de ir acumulando
-    # ROIs viejos de corridas previas.
+    # mode="w" sobrescribe el zip anterior en vez de ir acumulando ROIs viejos.
     roifile.roiwrite(roiset_file, rois, mode="w")

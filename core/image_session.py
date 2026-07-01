@@ -17,21 +17,9 @@ class ImageSession:
 
         self.filename = Path(filename)
 
-        # --------------------------------------------------
-        # Información del proyecto
-        # --------------------------------------------------
-
         self.calibration = None
 
-        self.rois = []
-
-        self.segmentations = []
-
-        self.measurements = []
-
         self.masks = None
-
-        self.notes = ""
 
     # ======================================================
     # PROPIEDADES
@@ -42,28 +30,13 @@ class ImageSession:
 
         return self.filename.name
 
-    # ======================================================
-
-    @property
-    def stem(self):
-
-        return self.filename.stem
-
-    # ======================================================
-
     @property
     def data_folder(self):
         """
-        Carpeta donde se guardarán los datos
-        asociados a esta imagen.
+        Carpeta donde se guardarán los datos asociados a esta imagen.
 
         Ejemplo:
-
-            imagen.tif
-
-                ↓
-
-            imagen/
+            imagen.tif → imagen/
         """
 
         return self.filename.parent / self.filename.stem
@@ -74,18 +47,12 @@ class ImageSession:
 
     @property
     def calibrated(self):
-        """
-        Indica si la imagen posee una calibración válida.
-        """
+        """Indica si la imagen posee una calibración válida."""
 
         return self.calibration is not None
 
-    # ======================================================
-
     def set_calibration(self, pixels, distance, unit):
-        """
-        Guarda la calibración de la imagen.
-        """
+        """Guarda la calibración de la imagen."""
 
         pixels = float(pixels)
         distance = float(distance)
@@ -97,12 +64,8 @@ class ImageSession:
             "pixel_size": distance / pixels,
         }
 
-    # ======================================================
-
     def clear_calibration(self):
-        """
-        Elimina la calibración.
-        """
+        """Elimina la calibración."""
 
         self.calibration = None
 
@@ -114,26 +77,20 @@ class ImageSession:
     def has_masks(self):
         """
         Indica si la imagen tiene al menos una segmentación
-        aceptada en memoria (lista para guardarse o ya guardada).
+        aceptada en memoria.
         """
 
         return self.masks is not None and np.any(self.masks > 0)
 
-    # ======================================================
-
     def set_masks(self, masks_array):
         """
         Guarda en memoria la matriz combinada de todas las
-        segmentaciones (ROIs) aceptadas para esta imagen.
+        segmentaciones aceptadas para esta imagen.
         """
 
         self.masks = masks_array
 
-    # ======================================================
-
     def clear_masks(self):
-        """
-        Elimina las máscaras en memoria.
-        """
+        """Elimina las máscaras en memoria."""
 
         self.masks = None

@@ -4,15 +4,33 @@
 # Archivo: main_window.py
 # ==========================================================
 
+import json
+import os
+from pathlib import Path
+
+import imageio.v3 as iio
+import numpy as np
+import tifffile
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QAction, QKeySequence, QShortcut
-from PySide6.QtWidgets import (QDialog, QFileDialog, QLabel, QMainWindow,
-                               QMessageBox, QProgressBar, QSplitter,
-                               QVBoxLayout, QWidget)
+from PySide6.QtWidgets import (
+    QApplication,
+    QDialog,
+    QFileDialog,
+    QLabel,
+    QMainWindow,
+    QMessageBox,
+    QProgressBar,
+    QSplitter,
+    QVBoxLayout,
+    QWidget,
+)
+from skimage.segmentation import mark_boundaries
 
 from core import storage
 from core.image_info import get_image_info
 from core.image_loader import find_images
+from core.measurements import calculate_measurements
 from core.session import Session
 from gui.calibration_dialog import CalibrationDialog
 from gui.export_dialog import ExportDialog
@@ -33,18 +51,14 @@ class MainWindow(QMainWindow):
 
         super().__init__()
 
-        self.images = []
-
         self.current_image = None
 
-        # Sesión temporal
         self.session = Session()
 
         self.setup_ui()
 
         self.create_menu()
 
-        # Ventana de calibración
         self.calibration_dialog = CalibrationDialog(self)
 
         # --------------------------------------------------
@@ -82,11 +96,6 @@ class MainWindow(QMainWindow):
         self.calibration_dialog.finished.connect(self.image_view.stop_measurement)
 
         self.calibration_dialog.calibration_saved.connect(self.save_calibration)
-
-        # --------------------------------------------------
-        # Atajo de teclado: Ctrl+Z deshace la última
-        # segmentación aceptada en la imagen actual.
-        # --------------------------------------------------
 
         self.undo_shortcut = QShortcut(QKeySequence("Ctrl+Z"), self)
         self.undo_shortcut.activated.connect(self.undo_last_segmentation)
@@ -137,67 +146,37 @@ class MainWindow(QMainWindow):
 
         file_menu = menu.addMenu("Archivo")
 
-        # ----------------------------------------------
-        # Abrir imagen
-        # ----------------------------------------------
-
         open_image_action = QAction("Abrir imagen...", self)
         open_image_action.setShortcut(QKeySequence("Ctrl+O"))
-
         open_image_action.triggered.connect(self.open_image)
-
         file_menu.addAction(open_image_action)
-
-        # ----------------------------------------------
-        # Abrir carpeta
-        # ----------------------------------------------
 
         open_folder_action = QAction("Abrir carpeta...", self)
         open_folder_action.setShortcut(QKeySequence("Ctrl+Shift+O"))
-
         open_folder_action.triggered.connect(self.open_folder)
-
         file_menu.addAction(open_folder_action)
 
         file_menu.addSeparator()
 
-        # ----------------------------------------------
-        # Guardar
-        # ----------------------------------------------
-
         save_action = QAction("Guardar", self)
         save_action.setShortcut(QKeySequence("Ctrl+S"))
-
         save_action.triggered.connect(self.save_project)
-
         file_menu.addAction(save_action)
 
         file_menu.addSeparator()
 
-        # ----------------------------------------------
-        # Exportar
-        # ----------------------------------------------
-
         export_action = QAction("Exportar...", self)
-
         export_action.triggered.connect(self.export_project)
-
         file_menu.addAction(export_action)
 
         file_menu.addSeparator()
 
-        # ----------------------------------------------
-        # Salir
-        # ----------------------------------------------
-
         exit_action = QAction("Salir", self)
-
         exit_action.triggered.connect(self.close)
-
         file_menu.addAction(exit_action)
 
     # ======================================================
-    # ABRIR IMAGEN
+    # ABRIR IMAGEN / CARPETA
     # ======================================================
 
     def open_image(self):
@@ -212,15 +191,7 @@ class MainWindow(QMainWindow):
         if not filenames:
             return
 
-        # add_images() ya selecciona la última imagen agregada, lo
-        # que dispara la señal image_selected -> load_image() sola.
-        # Llamarla de nuevo acá duplicaba la carga (y, antes del fix
-        # en session.py, generaba dos entradas para la misma imagen).
         self.project_panel.add_images(filenames)
-
-    # ======================================================
-    # ABRIR CARPETA
-    # ======================================================
 
     def open_folder(self):
 
@@ -241,9 +212,6 @@ class MainWindow(QMainWindow):
 
         self.project_panel.add_images(found_images)
 
-        # add_images() ya seleccionó la última imagen agregada; acá
-        # elegimos explícitamente la primera, lo que dispara
-        # image_selected -> load_image() una sola vez.
         self.project_panel.select_image(found_images[0])
 
     # ======================================================
@@ -266,15 +234,8 @@ class MainWindow(QMainWindow):
 
         image_session = self.session.add_image(filename)
 
-        # --------------------------------------------------
-        # NOTA: ya no se lee nada de disco automáticamente acá.
-        # Calibración y máscaras solo se restauran si ya estaban
-        # en la sesión en memoria (porque esta misma imagen se
-        # trabajó antes en esta corrida del programa). Para
-        # traer datos guardados en una corrida anterior hay que
-        # usar explícitamente "Cargar proyecto...".
-        # --------------------------------------------------
-
+        # Restaurar desde memoria si la imagen ya fue trabajada en esta sesión.
+        # Para cargar datos de sesiones anteriores usar "Cargar proyecto...".
         if image_session.masks is not None:
             self.image_view.load_accepted_masks(image_session.masks)
 
@@ -283,26 +244,22 @@ class MainWindow(QMainWindow):
         info = get_image_info(filename)
 
         if image_session.calibrated:
-
             info["scale"] = (
                 f'{image_session.calibration["pixel_size"]:.6f} '
                 f'{image_session.calibration["unit"]}/px'
             )
-
             info["status"] = "Calibrada"
 
         self.info_panel.update_info(info)
 
     # ======================================================
-    # CERRAR IMAGEN (botón ✕ del panel izquierdo)
+    # CERRAR IMAGEN
     # ======================================================
 
     def on_image_closed(self, filename):
         """
-        Se llama cuando el usuario cierra una imagen desde la lista
-        del panel izquierdo. Limpia el visor y borra los datos en
-        memoria de esa imagen para que, si se vuelve a abrir, empiece
-        limpia y el usuario deba cargar el proyecto manualmente.
+        Cierra una imagen de la lista y borra sus datos en memoria.
+        Al volver a abrirla, el usuario deberá cargar el proyecto manualmente.
         """
 
         self.session.remove_image(filename)
@@ -329,12 +286,8 @@ class MainWindow(QMainWindow):
     def open_calibration(self):
 
         self.calibration_dialog.show()
-
         self.calibration_dialog.raise_()
-
         self.calibration_dialog.activateWindow()
-
-    # ======================================================
 
     def save_calibration(self, pixels, distance, unit):
 
@@ -347,9 +300,7 @@ class MainWindow(QMainWindow):
         self.session.modified = True
 
         info = get_image_info(self.current_image)
-
-        info["scale"] = f'{image_session.calibration["pixel_size"]:.6f} ' f"{unit}/px"
-
+        info["scale"] = f'{image_session.calibration["pixel_size"]:.6f} {unit}/px'
         info["status"] = "Calibrada"
 
         self.info_panel.update_info(info)
@@ -359,26 +310,25 @@ class MainWindow(QMainWindow):
     # ======================================================
 
     def toggle_segmentation(self):
+
         if self.current_image is None:
             QMessageBox.warning(self, "Segmentación", "Primero debe abrir una imagen.")
             return
 
         if not getattr(self.image_view, "segmentation_mode", False):
-            # Detener modo manual si estaba activo
+
             if self.image_view.interaction_mode == "manual":
                 self.image_view.stop_manual_segmentation()
                 self.info_panel.manual_segment_button.setText("✏️ Segmentación manual")
 
-            # Mostrar diálogo de procesamiento en hilo separado
             self._run_segmentation_start()
+
         else:
             self.image_view.stop_segmentation()
             self.info_panel.segment_button.setText("▶ Segmentación Automática")
 
-    # ======================================================
-
     def _run_segmentation_start(self):
-        """Muestra el diálogo 'Procesando...' mientras SAM inicializa."""
+        """Muestra un diálogo de espera mientras SAM inicializa."""
 
         dlg = QDialog(self)
         dlg.setWindowTitle("Segmentación")
@@ -391,7 +341,7 @@ class MainWindow(QMainWindow):
         lbl.setAlignment(Qt.AlignCenter)
 
         bar = QProgressBar(dlg)
-        bar.setRange(0, 0)  # modo indeterminado (animado)
+        bar.setRange(0, 0)
         bar.setTextVisible(False)
 
         lay = QVBoxLayout(dlg)
@@ -399,11 +349,7 @@ class MainWindow(QMainWindow):
         lay.addWidget(bar)
         dlg.setLayout(lay)
 
-        # Ejecutar la inicialización de SAM de forma bloqueante
-        # pero mostrando el diálogo antes (procesEvents)
         dlg.show()
-        from PySide6.QtWidgets import QApplication
-
         QApplication.processEvents()
 
         try:
@@ -418,29 +364,31 @@ class MainWindow(QMainWindow):
         dlg.close()
         self.info_panel.segment_button.setText("⏹ Detener Segmentación Automática")
 
-    # ======================================================
-
     def toggle_manual_segmentation(self):
+
         if self.current_image is None:
             QMessageBox.warning(self, "Segmentación", "Primero debe abrir una imagen.")
             return
 
         if self.image_view.interaction_mode != "manual":
-            # Detener SAM si estaba activo
+
             if self.image_view.segmentation_mode:
                 self.image_view.stop_segmentation()
                 self.info_panel.segment_button.setText("▶ Segmentación Automática")
 
             self.image_view.start_manual_segmentation()
             self.info_panel.manual_segment_button.setText("⏹ Detener Seg. Manual")
+
         else:
             self.image_view.stop_manual_segmentation()
             self.info_panel.manual_segment_button.setText("✏️ Segmentación manual")
 
     # ======================================================
+    # MÁSCARAS — CALLBACKS
+    # ======================================================
 
     def on_mask_accepted(self, label_id):
-        """Callback cuando el usuario acepta una máscara (Enter)."""
+
         self.session.modified = True
 
         if self.current_image is not None:
@@ -451,10 +399,8 @@ class MainWindow(QMainWindow):
         self.info_panel.update_status(f"Segmentaciones: {label_id}")
         self.refresh_masks_panel()
 
-    # ======================================================
-
     def on_mask_removed(self, label_id):
-        """Callback cuando se borra una máscara (botón ✕ o Ctrl+Z)."""
+
         self.session.modified = True
 
         if self.current_image is not None:
@@ -465,28 +411,15 @@ class MainWindow(QMainWindow):
         self.info_panel.update_status(f"Segmentación {label_id} borrada")
         self.refresh_masks_panel()
 
-    # ======================================================
-
     def on_delete_mask_requested(self, label_id):
-        """El usuario tocó el botón ✕ de una fila en el panel de Segmentaciones."""
         self.image_view.remove_mask(label_id)
 
-    # ======================================================
-
     def undo_last_segmentation(self):
-        """Ctrl+Z: deshace la última segmentación aceptada en la imagen actual."""
-
         if self.current_image is None:
             return
-
         self.image_view.undo_last_mask()
 
-    # ======================================================
-
     def refresh_masks_panel(self):
-        """Repuebla la lista de segmentaciones del panel derecho con las
-        máscaras actualmente aceptadas en la imagen mostrada."""
-
         labels = self.image_view.get_mask_labels()
         self.info_panel.set_masks_list(labels)
 
@@ -543,11 +476,7 @@ class MainWindow(QMainWindow):
             )
 
     # ======================================================
-    # EXPORTAR
-    # ======================================================
-
-    # ======================================================
-    # CARGAR DATOS EXTERNOS
+    # CARGAR PROYECTO
     # ======================================================
 
     def load_project_data(self):
@@ -565,32 +494,27 @@ class MainWindow(QMainWindow):
         if not folder:
             return
 
-        from pathlib import Path
-
         folder_path = Path(folder)
-
-        calibration_file = folder_path / "calibration.json"
-        masks_file = folder_path / "masks.tif"
 
         image_session = self.session.get_image(self.current_image)
 
         loaded_something = False
 
-        if calibration_file.exists():
-            import json
+        calibration_data = storage.load_calibration(folder_path)
 
+        if calibration_data is not None:
             try:
-                with open(calibration_file, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-
                 image_session.set_calibration(
-                    data["pixels"], data["distance"], data["unit"]
+                    calibration_data["pixels"],
+                    calibration_data["distance"],
+                    calibration_data["unit"],
                 )
                 self.session.modified = True
 
                 info = get_image_info(self.current_image)
                 info["scale"] = (
-                    f'{image_session.calibration["pixel_size"]:.6f} {data["unit"]}/px'
+                    f'{image_session.calibration["pixel_size"]:.6f} '
+                    f'{calibration_data["unit"]}/px'
                 )
                 info["status"] = "Calibrada (Importada)"
                 self.info_panel.update_info(info)
@@ -598,22 +522,20 @@ class MainWindow(QMainWindow):
                 loaded_something = True
 
             except Exception as e:
-                QMessageBox.critical(self, "Error", f"Error al cargar calibración: {e}")
+                QMessageBox.critical(self, "Error", f"Error al cargar calibración:\n{e}")
 
-        if masks_file.exists():
+        masks_array = storage.load_masks(folder_path)
+
+        if masks_array is not None:
             try:
-                import tifffile
-
-                masks_array = tifffile.imread(masks_file)
-
                 image_session.set_masks(masks_array)
                 self.image_view.load_accepted_masks(masks_array)
+                self.refresh_masks_panel()
                 self.session.modified = True
-
                 loaded_something = True
 
             except Exception as e:
-                QMessageBox.critical(self, "Error", f"Error al cargar máscaras: {e}")
+                QMessageBox.critical(self, "Error", f"Error al cargar máscaras:\n{e}")
 
         if loaded_something:
             QMessageBox.information(
@@ -623,7 +545,7 @@ class MainWindow(QMainWindow):
             QMessageBox.information(
                 self,
                 "Cargar proyecto",
-                "No se encontraron datos de calibración ni máscaras en la carpeta seleccionada.",
+                "No se encontraron datos en la carpeta seleccionada.",
             )
 
     # ======================================================
@@ -631,123 +553,102 @@ class MainWindow(QMainWindow):
     # ======================================================
 
     def export_project(self):
+
         if self.current_image is None:
             QMessageBox.warning(self, "Exportar", "Primero debe abrir una imagen.")
             return
 
         dialog = ExportDialog(self)
-        if dialog.exec() == QDialog.Accepted:
-            settings = dialog.get_settings()
+        if dialog.exec() != QDialog.Accepted:
+            return
 
-            import os
+        settings = dialog.get_settings()
 
-            name_base = os.path.splitext(os.path.basename(self.current_image))[0]
-            default_path = os.path.join(
-                os.path.dirname(self.current_image), f"{name_base}_exportado.tif"
-            )
+        name_base = os.path.splitext(os.path.basename(self.current_image))[0]
+        default_path = os.path.join(
+            os.path.dirname(self.current_image), f"{name_base}_exportado.tif"
+        )
 
-            filename, _ = QFileDialog.getSaveFileName(
-                self,
-                "Exportar imagen",
-                default_path,
-                "Imágenes TIFF (*.tif *.tiff);;Imágenes PNG (*.png);;Imágenes JPEG (*.jpg *.jpeg)",
-            )
+        filename, _ = QFileDialog.getSaveFileName(
+            self,
+            "Exportar imagen",
+            default_path,
+            "Imágenes TIFF (*.tif *.tiff);;Imágenes PNG (*.png);;Imágenes JPEG (*.jpg *.jpeg)",
+        )
 
-            if not filename:
-                return
+        if not filename:
+            return
 
-            dlg = QDialog(self)
-            dlg.setWindowTitle("Exportando")
-            dlg.setWindowFlags(Qt.Dialog | Qt.CustomizeWindowHint | Qt.WindowTitleHint)
-            dlg.setFixedSize(300, 80)
-            lbl = QLabel("  Generando imagen exportada...", dlg)
-            lbl.setAlignment(Qt.AlignCenter)
-            bar = QProgressBar(dlg)
-            bar.setRange(0, 0)
-            bar.setTextVisible(False)
-            lay = QVBoxLayout(dlg)
-            lay.addWidget(lbl)
-            lay.addWidget(bar)
-            dlg.show()
-            from PySide6.QtWidgets import QApplication
+        dlg = QDialog(self)
+        dlg.setWindowTitle("Exportando")
+        dlg.setWindowFlags(Qt.Dialog | Qt.CustomizeWindowHint | Qt.WindowTitleHint)
+        dlg.setFixedSize(300, 80)
+        lbl = QLabel("  Generando imagen exportada...", dlg)
+        lbl.setAlignment(Qt.AlignCenter)
+        bar = QProgressBar(dlg)
+        bar.setRange(0, 0)
+        bar.setTextVisible(False)
+        lay = QVBoxLayout(dlg)
+        lay.addWidget(lbl)
+        lay.addWidget(bar)
+        dlg.show()
+        QApplication.processEvents()
 
-            QApplication.processEvents()
+        try:
+            img = iio.imread(self.current_image)
 
-            try:
-                import imageio.v3 as iio
-                import numpy as np
+            if settings["embed_rois"]:
+                image_session = self.session.get_image(self.current_image)
+                masks = image_session.masks
 
-                img = iio.imread(self.current_image)
+                if masks is not None and np.any(masks > 0):
 
-                if settings["embed_rois"]:
-                    image_session = self.session.get_image(self.current_image)
-                    masks = image_session.masks
-
-                    if masks is not None and np.any(masks > 0):
-                        if img.ndim == 2:
-                            img_rgb = np.stack((img,) * 3, axis=-1)
-                        elif img.shape[2] == 4:
-                            img_rgb = img[..., :3]
-                        else:
-                            img_rgb = img.copy()
-
-                        if img_rgb.dtype != np.uint8:
-                            # Normalize float images to 0-255 if needed
-                            if img_rgb.max() > 1.0 and img_rgb.dtype.kind in "fu":
-                                img_rgb = (
-                                    (img_rgb - img_rgb.min())
-                                    / (img_rgb.max() - img_rgb.min())
-                                    * 255
-                                )
-                            elif img_rgb.dtype.kind == "f":
-                                img_rgb = img_rgb * 255
-                            else:
-                                img_rgb = (
-                                    (img_rgb - img_rgb.min())
-                                    / (img_rgb.max() - img_rgb.min())
-                                    * 255
-                                )
-                            img_rgb = img_rgb.astype(np.uint8)
-
-                        if settings["style"] == "contour":
-                            from skimage.segmentation import mark_boundaries
-
-                            result = mark_boundaries(
-                                img_rgb, masks, color=(0, 1, 0), mode="outer"
-                            )
-                            img_out = (result * 255).astype(np.uint8)
-                        else:
-                            img_out = img_rgb.copy().astype(float)
-                            mask_bool = masks > 0
-                            alpha = 0.3
-                            img_out[mask_bool, 0] = img_out[mask_bool, 0] * (1 - alpha)
-                            img_out[mask_bool, 1] = (
-                                img_out[mask_bool, 1] * (1 - alpha) + 255 * alpha
-                            )
-                            img_out[mask_bool, 2] = img_out[mask_bool, 2] * (1 - alpha)
-                            img_out = img_out.astype(np.uint8)
+                    if img.ndim == 2:
+                        img_rgb = np.stack((img,) * 3, axis=-1)
+                    elif img.shape[2] == 4:
+                        img_rgb = img[..., :3]
                     else:
-                        img_out = img
+                        img_rgb = img.copy()
+
+                    if img_rgb.dtype != np.uint8:
+                        img_rgb = (
+                            (img_rgb - img_rgb.min())
+                            / (img_rgb.max() - img_rgb.min())
+                            * 255
+                        ).astype(np.uint8)
+
+                    if settings["style"] == "contour":
+                        result = mark_boundaries(img_rgb, masks, color=(0, 1, 0), mode="outer")
+                        img_out = (result * 255).astype(np.uint8)
+                    else:
+                        img_out = img_rgb.copy().astype(float)
+                        mask_bool = masks > 0
+                        alpha = 0.3
+                        img_out[mask_bool, 0] *= (1 - alpha)
+                        img_out[mask_bool, 1] = img_out[mask_bool, 1] * (1 - alpha) + 255 * alpha
+                        img_out[mask_bool, 2] *= (1 - alpha)
+                        img_out = img_out.astype(np.uint8)
                 else:
                     img_out = img
+            else:
+                img_out = img
 
-                iio.imwrite(filename, img_out)
-                dlg.close()
-                QMessageBox.information(
-                    self, "Exportar", f"Imagen exportada exitosamente a:\n{filename}"
-                )
+            iio.imwrite(filename, img_out)
+            dlg.close()
+            QMessageBox.information(
+                self, "Exportar", f"Imagen exportada exitosamente a:\n{filename}"
+            )
 
-            except Exception as e:
-                dlg.close()
-                QMessageBox.critical(
-                    self, "Error", f"Error al exportar la imagen:\n{str(e)}"
-                )
+        except Exception as e:
+            dlg.close()
+            QMessageBox.critical(self, "Error", f"Error al exportar la imagen:\n{str(e)}")
 
     # ======================================================
     # MEDICIONES
     # ======================================================
 
     def show_measurements(self):
+
         if self.current_image is None:
             QMessageBox.warning(self, "Mediciones", "Primero debe abrir una imagen.")
             return
@@ -760,33 +661,19 @@ class MainWindow(QMainWindow):
             return
 
         try:
-            import os
-
-            import imageio.v3 as iio
-
-            from core.measurements import calculate_measurements
-
-            # Cargar imagen original para la intensidad
             img = iio.imread(self.current_image)
 
-            # Obtener calibración
-            calibration = image_session.calibration
+            results = calculate_measurements(masks, img, image_session.calibration)
 
-            # Calcular mediciones
-            results = calculate_measurements(masks, img, calibration)
-
-            # Mostrar diálogo
             name_base = os.path.basename(self.current_image)
             dialog = MeasurementsDialog(results, name_base, self)
             dialog.exec()
 
         except Exception as e:
-            QMessageBox.critical(
-                self, "Error", f"Error al calcular mediciones:\n{str(e)}"
-            )
+            QMessageBox.critical(self, "Error", f"Error al calcular mediciones:\n{str(e)}")
 
     # ======================================================
-    # EVENTOS
+    # EVENTOS DE VENTANA
     # ======================================================
 
     def closeEvent(self, event):
