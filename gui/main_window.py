@@ -15,6 +15,7 @@ from core.image_info import get_image_info
 from core.image_loader import find_images
 from core.session import Session
 from gui.calibration_dialog import CalibrationDialog
+from gui.export_dialog import ExportDialog
 from gui.image_view import ImageView
 from gui.info_panel import InfoPanel
 from gui.project_panel import ProjectPanel
@@ -542,10 +543,6 @@ class MainWindow(QMainWindow):
     # EXPORTAR
     # ======================================================
 
-    def export_project(self):
-
-        print("Exportar proyecto")
-
     # ======================================================
     # CARGAR DATOS EXTERNOS
     # ======================================================
@@ -625,6 +622,123 @@ class MainWindow(QMainWindow):
                 "Cargar proyecto",
                 "No se encontraron datos de calibración ni máscaras en la carpeta seleccionada.",
             )
+
+    # ======================================================
+    # EXPORTAR IMAGEN
+    # ======================================================
+
+    def export_project(self):
+        if self.current_image is None:
+            QMessageBox.warning(self, "Exportar", "Primero debe abrir una imagen.")
+            return
+
+        dialog = ExportDialog(self)
+        if dialog.exec() == QDialog.Accepted:
+            settings = dialog.get_settings()
+
+            import os
+
+            name_base = os.path.splitext(os.path.basename(self.current_image))[0]
+            default_path = os.path.join(
+                os.path.dirname(self.current_image), f"{name_base}_exportado.tif"
+            )
+
+            filename, _ = QFileDialog.getSaveFileName(
+                self,
+                "Exportar imagen",
+                default_path,
+                "Imágenes TIFF (*.tif *.tiff);;Imágenes PNG (*.png);;Imágenes JPEG (*.jpg *.jpeg)",
+            )
+
+            if not filename:
+                return
+
+            dlg = QDialog(self)
+            dlg.setWindowTitle("Exportando")
+            dlg.setWindowFlags(Qt.Dialog | Qt.CustomizeWindowHint | Qt.WindowTitleHint)
+            dlg.setFixedSize(300, 80)
+            lbl = QLabel("  Generando imagen exportada...", dlg)
+            lbl.setAlignment(Qt.AlignCenter)
+            bar = QProgressBar(dlg)
+            bar.setRange(0, 0)
+            bar.setTextVisible(False)
+            lay = QVBoxLayout(dlg)
+            lay.addWidget(lbl)
+            lay.addWidget(bar)
+            dlg.show()
+            from PySide6.QtWidgets import QApplication
+
+            QApplication.processEvents()
+
+            try:
+                import imageio.v3 as iio
+                import numpy as np
+
+                img = iio.imread(self.current_image)
+
+                if settings["embed_rois"]:
+                    image_session = self.session.get_image(self.current_image)
+                    masks = image_session.masks
+
+                    if masks is not None and np.any(masks > 0):
+                        if img.ndim == 2:
+                            img_rgb = np.stack((img,) * 3, axis=-1)
+                        elif img.shape[2] == 4:
+                            img_rgb = img[..., :3]
+                        else:
+                            img_rgb = img.copy()
+
+                        if img_rgb.dtype != np.uint8:
+                            # Normalize float images to 0-255 if needed
+                            if img_rgb.max() > 1.0 and img_rgb.dtype.kind in "fu":
+                                img_rgb = (
+                                    (img_rgb - img_rgb.min())
+                                    / (img_rgb.max() - img_rgb.min())
+                                    * 255
+                                )
+                            elif img_rgb.dtype.kind == "f":
+                                img_rgb = img_rgb * 255
+                            else:
+                                img_rgb = (
+                                    (img_rgb - img_rgb.min())
+                                    / (img_rgb.max() - img_rgb.min())
+                                    * 255
+                                )
+                            img_rgb = img_rgb.astype(np.uint8)
+
+                        if settings["style"] == "contour":
+                            from skimage.segmentation import mark_boundaries
+
+                            result = mark_boundaries(
+                                img_rgb, masks, color=(0, 1, 0), mode="outer"
+                            )
+                            img_out = (result * 255).astype(np.uint8)
+                        else:
+                            img_out = img_rgb.copy().astype(float)
+                            mask_bool = masks > 0
+                            alpha = 0.3
+                            img_out[mask_bool, 0] = img_out[mask_bool, 0] * (1 - alpha)
+                            img_out[mask_bool, 1] = (
+                                img_out[mask_bool, 1] * (1 - alpha) + 255 * alpha
+                            )
+                            img_out[mask_bool, 2] = img_out[mask_bool, 2] * (1 - alpha)
+                            img_out = img_out.astype(np.uint8)
+                    else:
+                        img_out = img
+                else:
+                    img_out = img
+
+                iio.imwrite(filename, img_out)
+                dlg.close()
+                QMessageBox.information(
+                    self, "Exportar", f"Imagen exportada exitosamente a:\n{filename}"
+                )
+
+            except Exception as e:
+                dlg.close()
+                QMessageBox.critical(
+                    self, "Error", f"Error al exportar la imagen:\n{str(e)}"
+                )
 
     # ======================================================
     # EVENTOS
