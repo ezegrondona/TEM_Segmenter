@@ -15,7 +15,7 @@ from pathlib import Path
 
 PROGRAM_NAME = "TEM Segmenter"
 
-VERSION = "0.1.0"
+VERSION = "1.0"
 
 AUTHOR = "Dr. Ezequiel Grondona"
 
