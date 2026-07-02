@@ -46,11 +46,10 @@ class ImageView(QWidget):
 
         self.interaction_mode = MODE_NONE
 
-        # Estado de la barra espaciadora (pan temporal durante segmentación)
         self._space_held = False
 
-        # Historial de máscaras aceptadas en esta sesión de imagen,
-        # usado para Ctrl+Z. Se reinicia al cambiar de imagen.
+        # Historial de máscaras aceptadas para Ctrl+Z.
+        # Se reinicia al cambiar de imagen.
         self._mask_history = []
 
         self.tool_manager = ToolManager()
@@ -73,6 +72,7 @@ class ImageView(QWidget):
         qt.menuBar().hide()
         qt.statusBar().hide()
 
+        # Ocultar paneles internos de napari que no se usan en TEM Segmenter
         try:
             self.viewer.window._qt_viewer.dockLayerList.hide()
             self.viewer.window._qt_viewer.dockLayerControls.hide()
@@ -80,6 +80,17 @@ class ImageView(QWidget):
             self.viewer.window._qt_viewer.activity_dialog.hide()
         except Exception:
             pass
+
+        # Ocultar la pantalla de bienvenida de napari.
+        # Se intenta primero con el método público (napari >= 0.5),
+        # luego con el atributo interno como fallback.
+        try:
+            self.viewer.window._qt_viewer.set_welcome_visible(False)
+        except Exception:
+            try:
+                self.viewer.window._qt_viewer._welcome_widget.hide()
+            except Exception:
+                pass
 
         layout.addWidget(qt)
         self.setLayout(layout)
@@ -200,7 +211,7 @@ class ImageView(QWidget):
         self.measure_layer.mode = "pan_zoom"
 
     # ======================================================
-    # CAPAS DE SEGMENTACIÓN (crea si no existen)
+    # CAPAS DE SEGMENTACIÓN
     # ======================================================
 
     def _ensure_mask_layers(self):
@@ -232,10 +243,6 @@ class ImageView(QWidget):
     # ======================================================
 
     def get_masks_data(self):
-        """
-        Devuelve una copia de la matriz de segmentaciones aceptadas,
-        o None si no se aceptó ninguna todavía.
-        """
 
         if self.accepted_masks_layer is None:
             return None
@@ -243,9 +250,6 @@ class ImageView(QWidget):
         return self.accepted_masks_layer.data.copy()
 
     def load_accepted_masks(self, masks_array):
-        """
-        Restaura segmentaciones previas en la capa de segmentaciones aceptadas.
-        """
 
         if self.image_layer is None or masks_array is None:
             return
@@ -368,7 +372,6 @@ class ImageView(QWidget):
             self.manual_shapes_layer.mode = "pan_zoom"
 
     def _on_manual_shape_added(self, event):
-        """Convierte el polígono dibujado a una máscara en temp_mask_layer."""
 
         if self.tool_manager.current_tool != Tool.MANUAL:
             return
@@ -419,11 +422,6 @@ class ImageView(QWidget):
             super().keyReleaseEvent(event)
 
     def _on_space_pressed(self):
-        """
-        Activa el modo mover imagen mientras se mantiene espacio.
-        En modo manual, pone la capa en pan_zoom para que el arrastre
-        no agregue vértices al polígono.
-        """
 
         if self._space_held:
             return
@@ -438,10 +436,6 @@ class ImageView(QWidget):
             self.manual_shapes_layer.mode = "pan_zoom"
 
     def _on_space_released(self):
-        """
-        Desactiva el modo mover imagen y, si había segmentación manual
-        en curso, restaura el modo add_polygon.
-        """
 
         self._space_held = False
         self._set_pan_cursor(False)
@@ -464,9 +458,6 @@ class ImageView(QWidget):
             pass
 
     def _cancel_temp_selection(self):
-        """
-        Cancela la selección actual (ESCAPE) sin aceptarla.
-        """
 
         if self.temp_mask_layer is not None:
             self.temp_mask_layer.data = np.zeros_like(self.temp_mask_layer.data)
@@ -514,7 +505,6 @@ class ImageView(QWidget):
     # ======================================================
 
     def get_mask_labels(self):
-        """Lista ordenada de los números de máscara actualmente aceptados."""
 
         if self.accepted_masks_layer is None:
             return []
@@ -524,10 +514,6 @@ class ImageView(QWidget):
         return sorted(int(label) for label in labels if label != 0)
 
     def remove_mask(self, label_id):
-        """
-        Borra una máscara específica (por número), dejando intactas las demás.
-        Devuelve True si se borró algo.
-        """
 
         if self.accepted_masks_layer is None:
             return False
@@ -549,10 +535,6 @@ class ImageView(QWidget):
         return True
 
     def undo_last_mask(self):
-        """
-        Deshace la última máscara aceptada en esta imagen (Ctrl+Z).
-        El historial se reinicia al cambiar de imagen.
-        """
 
         if not self._mask_history:
             return None

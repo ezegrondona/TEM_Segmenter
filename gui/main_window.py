@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 
 import imageio.v3 as iio
+import napari
 import numpy as np
 import tifffile
 from PySide6.QtCore import Qt
@@ -144,6 +145,10 @@ class MainWindow(QMainWindow):
 
         menu = self.menuBar()
 
+        # ----------------------------------------------
+        # Archivo
+        # ----------------------------------------------
+
         file_menu = menu.addMenu("Archivo")
 
         open_image_action = QAction("Abrir imagen...", self)
@@ -174,6 +179,77 @@ class MainWindow(QMainWindow):
         exit_action = QAction("Salir", self)
         exit_action.triggered.connect(self.close)
         file_menu.addAction(exit_action)
+
+        # ----------------------------------------------
+        # Información
+        # ----------------------------------------------
+
+        info_action = QAction("Información", self)
+        info_action.triggered.connect(self.show_about)
+        menu.addAction(info_action)
+
+    # ======================================================
+    # DIÁLOGO INFORMACIÓN / ACERCA DE
+    # ======================================================
+
+    def show_about(self):
+        """
+        Muestra el diálogo de información de la aplicación.
+        Incluye descripción, autores, institución, contacto,
+        versión de TEM Segmenter y versión de napari embebido.
+        """
+
+        napari_version = napari.__version__
+
+        dlg = QDialog(self)
+        dlg.setWindowTitle("Información — TEM Segmenter")
+        dlg.setWindowFlags(dlg.windowFlags() & ~Qt.WindowContextHelpButtonHint)
+        dlg.setFixedWidth(520)
+
+        layout = QVBoxLayout(dlg)
+        layout.setSpacing(10)
+        layout.setContentsMargins(28, 24, 28, 20)
+
+        label = QLabel()
+        label.setWordWrap(True)
+        label.setOpenExternalLinks(True)
+        label.setText(
+            f"<h2 style='margin-bottom:4px;'>{PROGRAM_NAME}</h2>"
+            f"<p style='color:#888; margin-top:0;'>Versión {VERSION} (Estable)</p>"
+            "<hr>"
+            "<p>Aplicación de escritorio desarrollada en Python para asistir en la "
+            "segmentación semi-automática de imágenes de Microscopía Electrónica de "
+            "Transmisión (TEM), combinando inteligencia artificial (MobileSAM) con "
+            "criterio del investigador.</p>"
+            "<p>Los resultados se exportan como ROIs individuales compatibles con el "
+            "ROI Manager de Fiji/ImageJ.</p>"
+            "<hr>"
+            "<table cellspacing='4'>"
+            "<tr><td><b>Autor</b></td><td>Dr. Ezequiel Grondona</td></tr>"
+            "<tr><td><b>Institución</b></td><td>Centro de Microscopía Electrónica — "
+            "UNC / INICSA / CONICET</td></tr>"
+            "<tr><td><b>Contacto</b></td>"
+            "<td><a href='mailto:ezequiel.grondona@unc.edu.ar'>"
+            "ezequiel.grondona@unc.edu.ar</a></td></tr>"
+            "</table>"
+            "<hr>"
+            f"<p style='color:#888; font-size:11px;'>"
+            f"Motor de visualización: napari {napari_version}</p>"
+        )
+
+        from PySide6.QtWidgets import QPushButton, QHBoxLayout
+        ok_btn = QPushButton("Cerrar")
+        ok_btn.setFixedWidth(90)
+        ok_btn.clicked.connect(dlg.accept)
+
+        btn_layout = QHBoxLayout()
+        btn_layout.addStretch()
+        btn_layout.addWidget(ok_btn)
+
+        layout.addWidget(label)
+        layout.addLayout(btn_layout)
+
+        dlg.exec()
 
     # ======================================================
     # ABRIR IMAGEN / CARPETA
